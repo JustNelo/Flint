@@ -43,26 +43,31 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p src-tauri/resources
+          # NOTE: bsdtar (Windows) and GNU tar both interpret arguments containing
+          # a colon as `host:path`, so passing $RUNNER_TEMP (e.g. D:\a\_temp\...)
+          # to tar fails with "Cannot connect to D:". Work from the repo root
+          # with relative paths instead.
+          mkdir -p src-tauri/resources tmp-pdfium
 
           if [ ! -f "src-tauri/resources/pdfium.dll" ]; then
             echo "Fetching pdfium.dll..."
-            curl -sL -o "$RUNNER_TEMP/pdfium-win.tgz" \
+            curl -sL -o tmp-pdfium/win.tgz \
               "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-win-x64.tgz"
-            mkdir -p "$RUNNER_TEMP/win"
-            tar -xzf "$RUNNER_TEMP/pdfium-win.tgz" -C "$RUNNER_TEMP/win"
-            cp "$RUNNER_TEMP/win/bin/pdfium.dll" src-tauri/resources/pdfium.dll
+            mkdir -p tmp-pdfium/win
+            tar -xzf tmp-pdfium/win.tgz -C tmp-pdfium/win
+            cp tmp-pdfium/win/bin/pdfium.dll src-tauri/resources/pdfium.dll
           fi
 
           if [ ! -f "src-tauri/resources/libpdfium.so" ]; then
             echo "Fetching libpdfium.so..."
-            curl -sL -o "$RUNNER_TEMP/pdfium-linux.tgz" \
+            curl -sL -o tmp-pdfium/linux.tgz \
               "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz"
-            mkdir -p "$RUNNER_TEMP/linux"
-            tar -xzf "$RUNNER_TEMP/pdfium-linux.tgz" -C "$RUNNER_TEMP/linux"
-            cp "$RUNNER_TEMP/linux/lib/libpdfium.so" src-tauri/resources/libpdfium.so
+            mkdir -p tmp-pdfium/linux
+            tar -xzf tmp-pdfium/linux.tgz -C tmp-pdfium/linux
+            cp tmp-pdfium/linux/lib/libpdfium.so src-tauri/resources/libpdfium.so
           fi
 
+          rm -rf tmp-pdfium
           ls -la src-tauri/resources/
 
       - name: Setup Rust
