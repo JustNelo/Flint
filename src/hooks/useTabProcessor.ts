@@ -5,6 +5,7 @@ import { useFileSelection } from "./useFileSelection";
 import { useWorkspace } from "./useWorkspace";
 import { useHistory } from "./useHistory";
 import { useT } from "../i18n/i18n";
+import { logError } from "../lib/utils";
 import type { TabId, BatchProgress, ProcessingResult } from "../types";
 
 interface UseTabProcessorOptions {
@@ -82,6 +83,7 @@ export function useTabProcessor({ tabId, command, acceptToast }: UseTabProcessor
           toast.error(t("toast.all_failed"));
         }
       } catch (err) {
+        logError(`tab:${tabId}:${command}`, err);
         toast.error(t("toast.operation_failed"));
       } finally {
         setLoading(false);

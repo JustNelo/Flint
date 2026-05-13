@@ -1,10 +1,11 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
-import { safeAssetUrl } from "../lib/utils";
+import { logError } from "../lib/utils";
 import { useT } from "../i18n/i18n";
+import { usePdfPages, type BuilderPage } from "./usePdfPages";
+import { usePdfMaterializer } from "./usePdfMaterializer";
 import type {
-  PageThumbnail,
   PdfBuilderItem,
   MergePdfOptions,
   MergePdfResult,
@@ -13,12 +14,11 @@ import type {
   PdfWatermarkPosition,
 } from "../types";
 
-// --- Types ---
-
 export type PrimaryAction = "build" | "split" | "export-images" | "extract-images" | "watermark";
 type ProtectMode = "protect" | "unlock";
 export type ExportFormat = "png" | "jpg";
 export type ExportDpi = 72 | 150 | 300;
+export type { BuilderPage };
 
 export interface PostProcessing {
   compress: boolean;
@@ -37,11 +37,6 @@ export type PipelineStep =
   | "compress"
   | "protect";
 
-const IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "bmp", "ico", "tiff", "tif", "webp"]);
-
-const THUMBNAIL_BATCH_SIZE = 30;
-
-// Finds a unique file path by appending _2, _3, etc. if the file already exists
 async function uniquePath(basePath: string): Promise<string> {
   const { exists: fsExists } = await import("@tauri-apps/plugin-fs");
   if (!(await fsExists(basePath))) return basePath;
@@ -59,7 +54,6 @@ async function uniquePath(basePath: string): Promise<string> {
   return candidate;
 }
 
-// Sub-folder per action inside the pdf-toolkit directory
 const ACTION_SUBFOLDERS: Record<PrimaryAction | "unlock", string> = {
   build: "build",
   split: "split",
@@ -68,26 +62,6 @@ const ACTION_SUBFOLDERS: Record<PrimaryAction | "unlock", string> = {
   watermark: "watermarked",
   unlock: "unlocked",
 };
-
-function isImageFile(path: string): boolean {
-  const ext = path.split(".").pop()?.toLowerCase() || "";
-  return IMAGE_EXTENSIONS.has(ext);
-}
-
-function isPdfFile(path: string): boolean {
-  const ext = path.split(".").pop()?.toLowerCase() || "";
-  return ext === "pdf";
-}
-
-export interface BuilderPage {
-  id: string;
-  sourcePath: string;
-  pageNumber: number;
-  sourceType: "pdf" | "image";
-  thumbnailSrc: string;
-  fileName: string;
-  thumbnailLoaded: boolean;
-}
 
 interface PdfSplitResult {
   output_files: string[];
@@ -124,277 +98,64 @@ export type WorkbenchResult =
   | { type: "watermark"; data: PdfWatermarkResult; outputDir: string }
   | { type: "pipeline"; steps: string[]; errors: string[]; outputDir: string };
 
-// --- Hook ---
+async function ensureSubFolder(parent: string, folder: string, sep: string): Promise<string> {
+  const dir = `${parent}${sep}${folder}`;
+  try {
+    const { mkdir, exists: fsExists } = await import("@tauri-apps/plugin-fs");
+    if (!(await fsExists(dir))) {
+      await mkdir(dir, { recursive: true });
+    }
+  } catch (err) {
+    logError("pdf:mkdir", err);
+  }
+  return dir;
+}
 
+/**
+ * Orchestrates the PDF workbench feature: composes page state
+ * (`usePdfPages`), grid materialization (`usePdfMaterializer`), and the
+ * pipeline / watermark / unlock actions. Result + loading + pipeline-step
+ * UI state lives here; everything page-shaped lives in `usePdfPages`.
+ */
 export function usePdfWorkbench() {
   const { t } = useT();
-  const [pages, setPages] = useState<BuilderPage[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loadingThumbnails, setLoadingThumbnails] = useState(false);
   const [result, setResult] = useState<WorkbenchResult | null>(null);
   const [pipelineStep, setPipelineStep] = useState<PipelineStep | null>(null);
 
-  // Grid modification tracking
-  const [gridModified, setGridModified] = useState(false);
-  const initialSnapshotRef = useRef<string>("");
+  const pageState = usePdfPages();
+  const { pagesRef, gridModified, getSingleSourcePdf, getOutputStem } = pageState;
 
-  const pagesRef = useRef(pages);
-  useEffect(() => {
-    pagesRef.current = pages;
-  }, [pages]);
+  const { materializeGrid, cleanupTemp } = usePdfMaterializer({
+    pagesRef,
+    gridModified,
+    getSingleSourcePdf,
+    onStart: () => setPipelineStep("materialize"),
+  });
 
-  const abortRef = useRef<AbortController | null>(null);
-
-  // --- Snapshot: capture initial state when pages are first loaded ---
-  const captureSnapshot = useCallback((pageList: BuilderPage[]) => {
-    const sig = pageList.map((p) => `${p.sourcePath}:${p.pageNumber}`).join("|");
-    initialSnapshotRef.current = sig;
-    setGridModified(false);
-  }, []);
-
-  const checkIfModified = useCallback((pageList: BuilderPage[]) => {
-    const sig = pageList.map((p) => `${p.sourcePath}:${p.pageNumber}`).join("|");
-    setGridModified(sig !== initialSnapshotRef.current);
-  }, []);
-
-  // --- Detect if grid is "clean" = single PDF source, all pages, original order ---
-  const getSingleSourcePdf = useCallback((): string | null => {
-    const currentPages = pagesRef.current;
-    if (currentPages.length === 0) return null;
-    const uniqueSources = new Set(currentPages.map((p) => p.sourcePath));
-    if (uniqueSources.size !== 1) return null;
-    const firstPage = currentPages[0];
-    if (firstPage.sourceType !== "pdf") return null;
-    return firstPage.sourcePath;
-  }, []);
-
-  // --- Derive an output stem from the grid pages (original PDF name, not temp) ---
-  const getOutputStem = useCallback((): string | null => {
-    const currentPages = pagesRef.current;
-    if (currentPages.length === 0) return null;
-    // Find the first PDF source in the grid
-    const firstPdf = currentPages.find((p) => p.sourceType === "pdf");
-    if (firstPdf) {
-      const fileName = firstPdf.sourcePath.split(/[\\/]/).pop() || "";
-      const dotIdx = fileName.lastIndexOf(".");
-      return dotIdx > 0 ? fileName.substring(0, dotIdx) : fileName || null;
-    }
-    // Fallback: first image source name
-    const first = currentPages[0];
-    const fileName = first.sourcePath.split(/[\\/]/).pop() || "";
-    const dotIdx = fileName.lastIndexOf(".");
-    return dotIdx > 0 ? fileName.substring(0, dotIdx) : fileName || null;
-  }, []);
-
-  // --- Page management ---
-
+  // Wrap page-mutating callbacks so result/pipelineStep are reset for the user.
   const addFiles = useCallback(
     async (paths: string[]) => {
       setResult(null);
-
-      // Cancel any in-progress thumbnail loading
-      if (abortRef.current) {
-        abortRef.current.abort();
-      }
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      const imagePaths = paths.filter(isImageFile);
-      const pdfPaths = paths.filter(isPdfFile);
-
-      // Images are always added immediately → grid is dirty if pages already exist
-      const willHaveMultipleSources = pagesRef.current.length > 0;
-
-      const imagePages: BuilderPage[] = imagePaths.map((path, index) => {
-        const fileName = path.split(/[\\/]/).pop() || path;
-        return {
-          id: `img_${Date.now()}_${index}_${fileName}`,
-          sourcePath: path,
-          pageNumber: 0,
-          sourceType: "image" as const,
-          thumbnailSrc: safeAssetUrl(path),
-          fileName,
-          thumbnailLoaded: true,
-        };
-      });
-
-      if (imagePages.length > 0) {
-        setPages((prev) => [...prev, ...imagePages]);
-      }
-
-      // For PDFs: use paginated thumbnail loading
-      for (const pdfPath of pdfPaths) {
-        if (controller.signal.aborted) break;
-        setLoadingThumbnails(true);
-        try {
-          // Get page count first (instant)
-          const pageCount = await invoke<number>("get_pdf_page_count", {
-            pdfPath,
-          });
-
-          const fileName = pdfPath.split(/[\\/]/).pop() || pdfPath;
-
-          // Create placeholder pages immediately
-          const placeholders: BuilderPage[] = [];
-          for (let i = 1; i <= pageCount; i++) {
-            placeholders.push({
-              id: `pdf_${fileName}_p${i}_${Date.now()}`,
-              sourcePath: pdfPath,
-              pageNumber: i,
-              sourceType: "pdf",
-              thumbnailSrc: "",
-              fileName,
-              thumbnailLoaded: false,
-            });
-          }
-          setPages((prev) => [...prev, ...placeholders]);
-
-          // Load thumbnails in batches
-          for (let batch = 0; batch < pageCount; batch += THUMBNAIL_BATCH_SIZE) {
-            if (controller.signal.aborted) break;
-            const startPage = batch + 1;
-            const maxPages = Math.min(THUMBNAIL_BATCH_SIZE, pageCount - batch);
-            try {
-              const thumbnails = await invoke<PageThumbnail[]>("generate_pdf_thumbnails", {
-                filePaths: [pdfPath],
-                startPage,
-                maxPages,
-              });
-
-              // Update placeholders with real thumbnails (O(1) lookup via Map)
-              const thumbMap = new Map<number, string>();
-              for (const t of thumbnails) {
-                if (t.source_path === pdfPath && t.thumbnail_b64) {
-                  thumbMap.set(t.page_number, `data:image/jpeg;base64,${t.thumbnail_b64}`);
-                }
-              }
-              setPages((prev) =>
-                prev.map((page) => {
-                  if (page.sourcePath !== pdfPath || page.thumbnailLoaded) return page;
-                  const src = thumbMap.get(page.pageNumber);
-                  if (src !== undefined) {
-                    return { ...page, thumbnailSrc: src, thumbnailLoaded: true };
-                  }
-                  return page;
-                }),
-              );
-            } catch (batchErr) {
-              console.error(`Thumbnail batch error (pages ${startPage}-${startPage + maxPages}):`, batchErr);
-            }
-          }
-        } catch (err) {
-          const msg = String(err).toLowerCase();
-          if (msg.includes("password")) {
-            toast.error(t("toast.pdf_password_protected"));
-          } else {
-            toast.error(t("toast.pdf_load_failed"));
-          }
-        }
-      }
-      setLoadingThumbnails(false);
-
-      // Capture snapshot if this is the first load, otherwise mark as dirty
-      setPages((currentPages) => {
-        if (!willHaveMultipleSources && pdfPaths.length <= 1 && imagePaths.length === 0) {
-          // Single PDF load — capture as initial snapshot
-          captureSnapshot(currentPages);
-        } else if (willHaveMultipleSources || pdfPaths.length > 1 || (pdfPaths.length > 0 && imagePaths.length > 0)) {
-          setGridModified(true);
-        }
-        return currentPages;
-      });
+      await pageState.addFiles(paths);
     },
-    [captureSnapshot],
+    [pageState],
   );
 
   const removePage = useCallback(
     (id: string) => {
-      setPages((prev) => {
-        const next = prev.filter((p) => p.id !== id);
-        checkIfModified(next);
-        return next;
-      });
+      pageState.removePage(id);
       setResult(null);
     },
-    [checkIfModified],
-  );
-
-  const reorderPages = useCallback(
-    (reordered: BuilderPage[]) => {
-      setPages(reordered);
-      checkIfModified(reordered);
-    },
-    [checkIfModified],
+    [pageState],
   );
 
   const clearAll = useCallback(() => {
-    if (abortRef.current) {
-      abortRef.current.abort();
-      abortRef.current = null;
-    }
-    setPages([]);
-    setGridModified(false);
-    initialSnapshotRef.current = "";
+    pageState.clearAll();
     setResult(null);
     setPipelineStep(null);
-  }, []);
+  }, [pageState]);
 
-  // --- Materialize: build a temp PDF from grid pages if modified ---
-  const materializeGrid = useCallback(
-    async (outputDir: string): Promise<string | null> => {
-      const currentPages = pagesRef.current;
-      if (currentPages.length === 0) return null;
-
-      // Fast path: single unmodified PDF → use original file directly
-      if (!gridModified) {
-        const singleSource = getSingleSourcePdf();
-        if (singleSource) return singleSource;
-      }
-
-      setPipelineStep("materialize");
-
-      const sep = outputDir.includes("/") ? "/" : "\\";
-      const tempPath = `${outputDir}${sep}_rustine_temp_${Date.now()}.pdf`;
-
-      const items: PdfBuilderItem[] = currentPages.map((page) => ({
-        source_path: page.sourcePath,
-        page_number: page.sourceType === "pdf" ? page.pageNumber : null,
-        source_type: page.sourceType,
-      }));
-
-      const options: MergePdfOptions = {
-        page_format: "fit",
-        orientation: "portrait",
-        margin_px: 0,
-        image_quality: 90,
-        output_path: tempPath,
-      };
-
-      const res = await invoke<MergePdfResult>("merge_to_pdf", { items, options });
-      if (res.page_count === 0) {
-        throw new Error(res.errors[0] || "materialize_failed");
-      }
-      return tempPath;
-    },
-    [gridModified, getSingleSourcePdf],
-  );
-
-  // --- Temp file cleanup ---
-  const cleanupTemp = useCallback(async (path: string | null) => {
-    if (!path) return;
-    // Only cleanup files we created (temp files in outputDir starting with .rustine_temp_)
-    const fileName = path.split(/[\\/]/).pop() || "";
-    if (fileName.startsWith("_rustine_temp_")) {
-      try {
-        const { remove } = await import("@tauri-apps/plugin-fs");
-        await remove(path);
-      } catch {
-        // Best-effort cleanup
-      }
-    }
-  }, []);
-
-  // --- Pipeline execution ---
   const executePipeline = useCallback(
     async (
       primaryAction: PrimaryAction,
@@ -420,17 +181,8 @@ export function usePdfWorkbench() {
       let materializedPath: string | null = null;
 
       const sep = outputDir.includes("/") ? "/" : "\\";
+      const actionDir = await ensureSubFolder(outputDir, ACTION_SUBFOLDERS[primaryAction], sep);
 
-      // Ensure action-specific sub-folder exists
-      const actionSubfolder = ACTION_SUBFOLDERS[primaryAction];
-      const actionDir = `${outputDir}${sep}${actionSubfolder}`;
-      try {
-        const { mkdir, exists: fsExists } = await import("@tauri-apps/plugin-fs");
-        const dirExists = await fsExists(actionDir);
-        if (!dirExists) await mkdir(actionDir, { recursive: true });
-      } catch (dirErr) {
-        console.error("Cannot create action sub-folder:", dirErr);
-      }
       const safeName = (actionOptions.outputName || "document.pdf").endsWith(".pdf")
         ? actionOptions.outputName || "document.pdf"
         : `${actionOptions.outputName || "document"}.pdf`;
@@ -442,7 +194,6 @@ export function usePdfWorkbench() {
           setPipelineStep("build");
           pipelineSteps.push("build");
 
-          // If post-processing is needed, build to temp first; otherwise write directly
           const needsPostProcessing = postProcessing.compress || postProcessing.protect;
           const directPath = await uniquePath(`${actionDir}${sep}${safeName}`);
           const buildPath = needsPostProcessing
@@ -480,7 +231,6 @@ export function usePdfWorkbench() {
             return;
           }
         } else if (primaryAction === "split") {
-          // Materialize first if grid was modified
           materializedPath = await materializeGrid(outputDir);
           if (!materializedPath) {
             toast.error(t("toast.select_pdf"));
@@ -579,14 +329,13 @@ export function usePdfWorkbench() {
           return;
         }
 
-        // === POST-PROCESSING (only for Build action) ===
+        // === POST-PROCESSING (Build action only) ===
 
         const desiredPath = await uniquePath(`${actionDir}${sep}${safeName}`);
 
         let currentPdfPath = materializedPath!;
         const intermediates: string[] = [];
 
-        // Compress step
         if (postProcessing.compress) {
           setPipelineStep("compress");
           pipelineSteps.push("compress");
@@ -605,7 +354,6 @@ export function usePdfWorkbench() {
           }
         }
 
-        // Protect step
         if (postProcessing.protect && postProcessing.protectPassword.trim()) {
           setPipelineStep("protect");
           pipelineSteps.push("protect");
@@ -624,22 +372,20 @@ export function usePdfWorkbench() {
           }
         }
 
-        // Rename the final output to the user's desired name
         if (pipelineErrors.length === 0 && currentPdfPath !== desiredPath) {
           try {
             const { rename } = await import("@tauri-apps/plugin-fs");
             await rename(currentPdfPath, desiredPath);
           } catch (renameErr) {
+            logError("pdf:rename", renameErr);
             pipelineErrors.push(t("toast.rename_failed"));
           }
         }
 
-        // Cleanup all intermediate temp files
         for (const tmp of intermediates) {
           await cleanupTemp(tmp);
         }
 
-        // Pipeline result
         setResult({
           type: "pipeline",
           steps: pipelineSteps,
@@ -658,6 +404,7 @@ export function usePdfWorkbench() {
           );
         }
       } catch (err) {
+        logError(`pdf:pipeline:${primaryAction}`, err);
         const msg = String(err).toLowerCase();
         if (msg.includes("password")) {
           toast.error(t("toast.pdf_password_protected"));
@@ -666,7 +413,6 @@ export function usePdfWorkbench() {
         } else {
           toast.error(t("toast.unexpected_error"));
         }
-        // Cleanup any temp files
         if (materializedPath) {
           await cleanupTemp(materializedPath);
         }
@@ -675,10 +421,9 @@ export function usePdfWorkbench() {
         setPipelineStep(null);
       }
     },
-    [materializeGrid, cleanupTemp, getOutputStem, t],
+    [pagesRef, materializeGrid, cleanupTemp, getOutputStem, t],
   );
 
-  // --- Standalone: Watermark PDF ---
   const watermarkPdf = useCallback(
     async (
       outputDir: string,
@@ -704,14 +449,7 @@ export function usePdfWorkbench() {
       let materializedPath: string | null = null;
 
       const sep = outputDir.includes("/") ? "/" : "\\";
-      const actionDir = `${outputDir}${sep}${ACTION_SUBFOLDERS.watermark}`;
-      try {
-        const { mkdir, exists: fsExists } = await import("@tauri-apps/plugin-fs");
-        const dirExists = await fsExists(actionDir);
-        if (!dirExists) await mkdir(actionDir, { recursive: true });
-      } catch (dirErr) {
-        console.error("Cannot create watermark sub-folder:", dirErr);
-      }
+      const actionDir = await ensureSubFolder(outputDir, ACTION_SUBFOLDERS.watermark, sep);
 
       try {
         materializedPath = await materializeGrid(outputDir);
@@ -723,28 +461,25 @@ export function usePdfWorkbench() {
 
         setPipelineStep("watermark");
 
-        let res: PdfWatermarkResult;
-
-        if (watermarkMode === "text") {
-          res = await invoke<PdfWatermarkResult>("watermark_pdf_text_cmd", {
-            pdfPath: materializedPath,
-            text: options.text || "",
-            position: options.position,
-            opacity: options.opacity,
-            fontSize: options.fontSize || 48,
-            color: options.color || "#B3B3B3",
-            outputDir: actionDir,
-          });
-        } else {
-          res = await invoke<PdfWatermarkResult>("watermark_pdf_image_cmd", {
-            pdfPath: materializedPath,
-            imagePath: options.imagePath || "",
-            position: options.position,
-            opacity: options.opacity,
-            scale: options.scale || 0.25,
-            outputDir: actionDir,
-          });
-        }
+        const res =
+          watermarkMode === "text"
+            ? await invoke<PdfWatermarkResult>("watermark_pdf_text_cmd", {
+                pdfPath: materializedPath,
+                text: options.text || "",
+                position: options.position,
+                opacity: options.opacity,
+                fontSize: options.fontSize || 48,
+                color: options.color || "#B3B3B3",
+                outputDir: actionDir,
+              })
+            : await invoke<PdfWatermarkResult>("watermark_pdf_image_cmd", {
+                pdfPath: materializedPath,
+                imagePath: options.imagePath || "",
+                position: options.position,
+                opacity: options.opacity,
+                scale: options.scale || 0.25,
+                outputDir: actionDir,
+              });
 
         await cleanupTemp(materializedPath);
 
@@ -756,6 +491,7 @@ export function usePdfWorkbench() {
           toast.error(t("toast.pdf_watermark_failed"));
         }
       } catch (err) {
+        logError("pdf:watermark", err);
         toast.error(t("toast.pdf_watermark_failed"));
         if (materializedPath) {
           await cleanupTemp(materializedPath);
@@ -765,10 +501,9 @@ export function usePdfWorkbench() {
         setPipelineStep(null);
       }
     },
-    [materializeGrid, cleanupTemp, t],
+    [pagesRef, materializeGrid, cleanupTemp, t],
   );
 
-  // --- Standalone: Unlock PDF (no grid interaction) ---
   const unlockPdf = useCallback(
     async (pdfPath: string, password: string, outputDir: string) => {
       if (!password.trim()) {
@@ -779,16 +514,8 @@ export function usePdfWorkbench() {
       setLoading(true);
       setResult(null);
 
-      // Ensure unlock sub-folder exists
       const sep = outputDir.includes("/") ? "/" : "\\";
-      const unlockDir = `${outputDir}${sep}${ACTION_SUBFOLDERS.unlock}`;
-      try {
-        const { mkdir, exists: fsExists } = await import("@tauri-apps/plugin-fs");
-        const dirExists = await fsExists(unlockDir);
-        if (!dirExists) await mkdir(unlockDir, { recursive: true });
-      } catch (dirErr) {
-        console.error("Cannot create unlock sub-folder:", dirErr);
-      }
+      const unlockDir = await ensureSubFolder(outputDir, ACTION_SUBFOLDERS.unlock, sep);
 
       try {
         const res = await invoke<PdfProtectResult>("unlock_pdf_cmd", {
@@ -805,6 +532,7 @@ export function usePdfWorkbench() {
           toast.error(t("toast.pdf_unlock_failed"));
         }
       } catch (err) {
+        logError("pdf:unlock", err);
         toast.error(t("toast.pdf_unlock_failed"));
       } finally {
         setLoading(false);
@@ -814,19 +542,16 @@ export function usePdfWorkbench() {
   );
 
   return {
-    // Page state
-    pages,
+    pages: pageState.pages,
     loading,
-    loadingThumbnails,
+    loadingThumbnails: pageState.loadingThumbnails,
     result,
     gridModified,
     pipelineStep,
-    // Page management
     addFiles,
     removePage,
-    reorderPages,
+    reorderPages: pageState.reorderPages,
     clearAll,
-    // Actions
     executePipeline,
     watermarkPdf,
     unlockPdf,

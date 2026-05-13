@@ -4425,10 +4425,12 @@ dependencies = [
 
 [[package]]
 name = "rustine"
-version = "2.1.2"
+version = "2.2.0"
 dependencies = [
  "ab_glyph",
+ "aes",
  "base64 0.22.1",
+ "cbc",
  "dirs",
  "gif 0.13.3",
  "image",
@@ -4439,6 +4441,7 @@ dependencies = [
  "oxipng",
  "pdfium-render",
  "qrcode",
+ "rand 0.8.5",
  "rayon",
  "resvg",
  "serde",

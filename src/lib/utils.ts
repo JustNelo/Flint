@@ -35,3 +35,15 @@ export function safeAssetUrl(filePath: string, bustCache = false): string {
   const base = convertFileSrc(normalized);
   return bustCache ? `${base}?v=${encodeURIComponent(filePath)}` : base;
 }
+
+/**
+ * Log an error from a Tauri invoke / async boundary in a consistent shape.
+ * The user-facing toast remains driven by i18n; this just makes the original
+ * Rust error reachable via devtools so bug reports stop saying "it failed".
+ */
+export function logError(context: string, err: unknown): void {
+  // Rust commands always reject with String, but other layers (Tauri plugins,
+  // network) may reject with an Error or any other shape — normalize all of them.
+  const message = err instanceof Error ? err.message : String(err);
+  console.error(`[${context}]`, message, err);
+}

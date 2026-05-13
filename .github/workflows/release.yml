@@ -33,21 +33,38 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Ensure pdfium.dll exists (Windows)
+      # pdfium binaries are downloaded at build time rather than tracked in git
+      # (each is ~6 MB and bumps the repo size on every pdfium version bump).
+      # Source: https://github.com/bblanchon/pdfium-binaries
+      - name: Fetch pdfium.dll (Windows)
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          if (-not (Test-Path "src-tauri/resources/pdfium.dll")) {
-            Write-Error "pdfium.dll is missing from src-tauri/resources/."
-            exit 1
+          $dest = "src-tauri/resources/pdfium.dll"
+          if (Test-Path $dest) {
+            Write-Host "pdfium.dll already present, skipping download."
+          } else {
+            New-Item -ItemType Directory -Force -Path "src-tauri/resources" | Out-Null
+            $tmp = Join-Path $env:RUNNER_TEMP "pdfium-win.tgz"
+            Invoke-WebRequest -Uri "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-win-x64.tgz" -OutFile $tmp
+            tar -xzf $tmp -C $env:RUNNER_TEMP
+            Copy-Item -Path (Join-Path $env:RUNNER_TEMP "bin/pdfium.dll") -Destination $dest
+            Write-Host "pdfium.dll fetched -> $dest"
           }
 
-      - name: Ensure libpdfium.so exists (Linux)
+      - name: Fetch libpdfium.so (Linux)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
-          if [ ! -f "src-tauri/resources/libpdfium.so" ]; then
-            echo "::error::libpdfium.so is missing from src-tauri/resources/."
-            exit 1
+          dest="src-tauri/resources/libpdfium.so"
+          if [ -f "$dest" ]; then
+            echo "libpdfium.so already present, skipping download."
+          else
+            mkdir -p src-tauri/resources
+            tmp="$RUNNER_TEMP/pdfium-linux.tgz"
+            curl -sL -o "$tmp" "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz"
+            tar -xzf "$tmp" -C "$RUNNER_TEMP"
+            cp "$RUNNER_TEMP/lib/libpdfium.so" "$dest"
+            echo "libpdfium.so fetched -> $dest"
           fi
 
       - name: Setup Rust

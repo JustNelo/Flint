@@ -87,6 +87,10 @@ All Tauri commands live in `lib.rs`, which delegates to domain-specific modules:
 
 PDF features that require rendering (extract, render, unlock, thumbnails) depend on `pdfium-render`, which loads `pdfium.dll` (Windows) or `libpdfium.so` (Linux) at runtime. The file must exist in `src-tauri/resources/` before building or running in dev mode. It is bundled as a resource and resolved at startup via `resolve_pdfium_path()`.
 
+The binaries are **not tracked in git** (they bloat the repo by ~12 MB and would change on every pdfium version bump). They are:
+- Downloaded on demand by the CI workflow (`.github/workflows/release.yml`) from [bblanchon/pdfium-binaries](https://github.com/bblanchon/pdfium-binaries).
+- Expected to be placed manually in `src-tauri/resources/` for local development. Grab the latest release for your platform.
+
 ### CI / Release
 
 Releases are triggered by pushing a `v*` tag. The workflow (`.github/workflows/release.yml`) runs `cargo fmt --check`, `cargo clippy -- -D warnings`, and `cargo test` before building. Keep formatting and clippy clean before tagging.

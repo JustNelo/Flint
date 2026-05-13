@@ -1,7 +1,8 @@
 import { useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { QrCode } from "lucide-react";
+import { QrCode, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { ActionButton } from "./ui/ActionButton";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useHistory } from "../hooks/useHistory";
@@ -126,6 +127,10 @@ export function QrCodeTab() {
           <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-tertiary)" }}>
             {result.size}×{result.size}px
           </span>
+          <button onClick={() => revealItemInDir(result.output_path)} className="btn-ghost">
+            <FolderOpen className="h-3 w-3" strokeWidth={1.5} />
+            {t("label.open_output_folder")}
+          </button>
         </div>
       )}
     </div>

@@ -6,7 +6,6 @@ import {
   Scissors,
   Image,
   FileDown,
-  Lock,
   Unlock,
   Plus,
   Trash2,
@@ -26,6 +25,7 @@ import { toast } from "sonner";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { cn, formatSize, safeAssetUrl } from "../lib/utils";
 import { PdfPageGrid } from "./PdfPageGrid";
+import { PdfUnlockPanel } from "./PdfUnlockPanel";
 import { ActionButton } from "./ui/ActionButton";
 import { Slider } from "./ui/Slider";
 import { useWorkspace } from "../hooks/useWorkspace";
@@ -303,6 +303,15 @@ export function PdfWorkbenchTab() {
     await unlockPdf(unlockFile, unlockPassword, outputDir);
   }, [unlockFile, unlockPassword, getOutputDir, unlockPdf]);
 
+  // Wraps ResultPanel so child components can render it without re-passing `t`.
+  const ResultPanelBound = useMemo(
+    () =>
+      function BoundResultPanel({ result: r }: { result: WorkbenchResult | null }) {
+        return <ResultPanel result={r} t={t} />;
+      },
+    [t],
+  );
+
   // --- Disable logic ---
   const isExecuteDisabled = useMemo(() => {
     if (loading) return true;
@@ -376,68 +385,17 @@ export function PdfWorkbenchTab() {
 
       {/* ========== UNLOCK MODE ========== */}
       {mode === "unlock" && (
-        <div className="space-y-4">
-          {/* Drop zone for unlock */}
-          <div
-            onClick={handleSelectUnlockFile}
-            className="relative flex flex-col items-center justify-center gap-3 p-8 cursor-pointer"
-            style={{
-              borderRadius: 16,
-              border: "2px dashed var(--bg-border)",
-              background: "var(--bg-overlay)",
-              transition: "all 200ms ease",
-            }}
-          >
-            <div
-              className="flex h-12 w-12 items-center justify-center rounded-full"
-              style={{ background: "var(--bg-elevated)", color: "var(--text-tertiary)" }}
-            >
-              <Lock className="h-6 w-6" strokeWidth={1.5} />
-            </div>
-            <div className="text-center">
-              <p style={{ fontSize: "var(--text-base)", fontWeight: 500, color: "var(--text-primary)" }}>
-                {t("pdf_tool.drop_locked_pdf")}
-              </p>
-              <p className="mt-1 text-xs text-neutral-500">{t("pdf_tool.drop_locked_pdf_hint")}</p>
-            </div>
-          </div>
-
-          {unlockFile && (
-            <div className="forge-card p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <Lock className="h-4 w-4" style={{ color: "var(--text-tertiary)" }} strokeWidth={1.5} />
-                <span
-                  className="truncate"
-                  style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}
-                >
-                  {unlockFile.split(/[\\/]/).pop()}
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium uppercase tracking-widest text-neutral-500">
-                  {t("label.pdf_password")}
-                </label>
-                <input
-                  type="password"
-                  value={unlockPassword}
-                  onChange={(e) => setUnlockPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="forge-input w-full"
-                />
-              </div>
-              <ActionButton
-                onClick={handleUnlock}
-                disabled={loading || !unlockPassword.trim()}
-                loading={loading}
-                loadingText={t("status.unlocking_pdf")}
-                text={t("action.unlock_pdf")}
-                icon={<Unlock className="h-4 w-4" />}
-              />
-            </div>
-          )}
-
-          <ResultPanel result={result} t={t} />
-        </div>
+        <PdfUnlockPanel
+          unlockFile={unlockFile}
+          unlockPassword={unlockPassword}
+          loading={loading}
+          result={result}
+          onSelectFile={handleSelectUnlockFile}
+          onPasswordChange={setUnlockPassword}
+          onUnlock={handleUnlock}
+          ResultPanel={ResultPanelBound}
+          t={t}
+        />
       )}
 
       {/* ========== WORKBENCH MODE ========== */}
@@ -831,6 +789,13 @@ export function PdfWorkbenchTab() {
                       </button>
                       {ppProtect && (
                         <div className="mt-2 pl-2 space-y-1.5">
+                          <div
+                            className="flex gap-1.5 items-center text-[10px]"
+                            style={{ color: "var(--text-tertiary)" }}
+                          >
+                            <Shield className="h-3 w-3 shrink-0" strokeWidth={1.8} />
+                            <span>{t("notice.protect_aes128")}</span>
+                          </div>
                           <input
                             type="password"
                             value={ppPassword}
@@ -993,15 +958,25 @@ function ResultPanel({ result, t }: ResultPanelProps) {
       errors = result.data.errors;
       break;
 
-    case "protect":
+    case "protect": {
       successIcon = result.data.success;
-      mainText = result.data.success
-        ? result.mode === "protect"
-          ? t("result.pdf_protected")
-          : t("result.pdf_unlocked")
-        : result.data.errors[0] || t("toast.all_failed");
-      errors = result.data.success ? [] : result.data.errors;
+      if (result.data.success) {
+        mainText = result.mode === "protect" ? t("result.pdf_protected") : t("result.pdf_unlocked");
+        errors = [];
+      } else {
+        const firstErr = result.data.errors[0];
+        // Translate the well-known sentinel emitted by unlock_pdf when pdfium
+        // reports a password mismatch; show raw text otherwise.
+        if (firstErr === "WRONG_PASSWORD") {
+          mainText = t("toast.pdf_wrong_password");
+        } else {
+          mainText = firstErr || t("toast.all_failed");
+        }
+        // Single, already-displayed error — don't duplicate it below.
+        errors = [];
+      }
       break;
+    }
 
     case "pipeline":
       successIcon = result.errors.length === 0;
