@@ -35,37 +35,35 @@ jobs:
 
       # pdfium binaries are downloaded at build time rather than tracked in git
       # (each is ~6 MB and bumps the repo size on every pdfium version bump).
+      # Both binaries must exist on every runner because tauri.conf.json lists
+      # them in bundle.resources unconditionally — the build-script verifies
+      # presence regardless of the target platform.
       # Source: https://github.com/bblanchon/pdfium-binaries
-      - name: Fetch pdfium.dll (Windows)
-        if: matrix.platform == 'windows-latest'
-        shell: pwsh
+      - name: Fetch pdfium binaries
+        shell: bash
         run: |
-          $dest = "src-tauri/resources/pdfium.dll"
-          if (Test-Path $dest) {
-            Write-Host "pdfium.dll already present, skipping download."
-          } else {
-            New-Item -ItemType Directory -Force -Path "src-tauri/resources" | Out-Null
-            $tmp = Join-Path $env:RUNNER_TEMP "pdfium-win.tgz"
-            Invoke-WebRequest -Uri "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-win-x64.tgz" -OutFile $tmp
-            tar -xzf $tmp -C $env:RUNNER_TEMP
-            Copy-Item -Path (Join-Path $env:RUNNER_TEMP "bin/pdfium.dll") -Destination $dest
-            Write-Host "pdfium.dll fetched -> $dest"
-          }
+          set -euo pipefail
+          mkdir -p src-tauri/resources
 
-      - name: Fetch libpdfium.so (Linux)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          dest="src-tauri/resources/libpdfium.so"
-          if [ -f "$dest" ]; then
-            echo "libpdfium.so already present, skipping download."
-          else
-            mkdir -p src-tauri/resources
-            tmp="$RUNNER_TEMP/pdfium-linux.tgz"
-            curl -sL -o "$tmp" "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz"
-            tar -xzf "$tmp" -C "$RUNNER_TEMP"
-            cp "$RUNNER_TEMP/lib/libpdfium.so" "$dest"
-            echo "libpdfium.so fetched -> $dest"
+          if [ ! -f "src-tauri/resources/pdfium.dll" ]; then
+            echo "Fetching pdfium.dll..."
+            curl -sL -o "$RUNNER_TEMP/pdfium-win.tgz" \
+              "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-win-x64.tgz"
+            mkdir -p "$RUNNER_TEMP/win"
+            tar -xzf "$RUNNER_TEMP/pdfium-win.tgz" -C "$RUNNER_TEMP/win"
+            cp "$RUNNER_TEMP/win/bin/pdfium.dll" src-tauri/resources/pdfium.dll
           fi
+
+          if [ ! -f "src-tauri/resources/libpdfium.so" ]; then
+            echo "Fetching libpdfium.so..."
+            curl -sL -o "$RUNNER_TEMP/pdfium-linux.tgz" \
+              "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz"
+            mkdir -p "$RUNNER_TEMP/linux"
+            tar -xzf "$RUNNER_TEMP/pdfium-linux.tgz" -C "$RUNNER_TEMP/linux"
+            cp "$RUNNER_TEMP/linux/lib/libpdfium.so" src-tauri/resources/libpdfium.so
+          fi
+
+          ls -la src-tauri/resources/
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
