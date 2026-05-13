@@ -45,7 +45,7 @@ pub fn extract_palette(image_path: &str, num_colors: usize) -> Result<PaletteRes
 
     // Sort buckets by frequency (descending)
     let mut sorted: Vec<((u8, u8, u8), u32)> = buckets.into_iter().collect();
-    sorted.sort_by(|a, b| b.1.cmp(&a.1));
+    sorted.sort_by_key(|b| std::cmp::Reverse(b.1));
 
     // Merge similar colors that are too close together
     let mut final_colors: Vec<((u8, u8, u8), u32)> = Vec::new();
