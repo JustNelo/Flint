@@ -6,6 +6,8 @@ import { DropZone } from "./DropZone";
 import { ImageGrid } from "./ImageGrid";
 import { ResultsBanner } from "./ResultsBanner";
 import { ActionButton } from "./ui/ActionButton";
+import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
+import { ControlsPanel } from "./ControlsPanel";
 import { Slider } from "./ui/Slider";
 import { useFileSelection } from "../hooks/useFileSelection";
 import { useWorkspace } from "../hooks/useWorkspace";
@@ -41,11 +43,13 @@ export function ResizeTab() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ProcessingResult[]>([]);
   const [lastOutputDir, setLastOutputDir] = useState("");
+  const [panelMode, setPanelMode] = useState<MaterialMode>("material");
 
   const handleFilesSelected = useCallback(
     (paths: string[]) => {
       addFiles(paths);
       setResults([]);
+      setPanelMode("material");
     },
     [addFiles],
   );
@@ -53,6 +57,7 @@ export function ResizeTab() {
   const handleClearFiles = useCallback(() => {
     clearFiles();
     setResults([]);
+    setPanelMode("material");
   }, [clearFiles]);
 
   const handleResize = useCallback(async () => {
@@ -81,6 +86,7 @@ export function ResizeTab() {
       });
 
       setResults(result.results);
+      if (result.results.length > 0) setPanelMode("results");
 
       const successCount = result.results.filter((r) => r.success).length;
       const failCount = result.results.filter((r) => !r.success).length;
@@ -100,18 +106,42 @@ export function ResizeTab() {
     }
   }, [files, mode, width, height, percentage, getOutputDir, addEntry, t]);
 
+  const isEmpty = files.length === 0;
+
   return (
-    <div className="space-y-5">
-      <DropZone
-        accept="png,jpg,jpeg,bmp,ico,tiff,tif,webp,gif"
-        label={t("dropzone.images_resize")}
-        sublabel={t("dropzone.sublabel_resize")}
-        onFilesSelected={handleFilesSelected}
+    <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+      <MaterialPanel
+        mode={panelMode}
+        onModeChange={setPanelMode}
+        hasResults={results.length > 0}
+        material={
+          <div className="space-y-3">
+            <DropZone
+              accept="png,jpg,jpeg,bmp,ico,tiff,tif,webp,gif"
+              label={isEmpty ? t("dropzone.images_resize") : t("dropzone.add_more")}
+              sublabel={t("dropzone.sublabel_resize")}
+              compact={!isEmpty}
+              onFilesSelected={handleFilesSelected}
+            />
+            <ImageGrid files={files} onReorder={reorderFiles} onRemove={removeFile} onClear={handleClearFiles} />
+          </div>
+        }
+        results={<ResultsBanner results={results} total={files.length} outputDir={lastOutputDir} />}
       />
 
-      <ImageGrid files={files} onReorder={reorderFiles} onRemove={removeFile} onClear={handleClearFiles} />
-
-      <div className="space-y-3">
+      <ControlsPanel
+        disabled={isEmpty}
+        action={
+          <ActionButton
+            onClick={handleResize}
+            disabled={isEmpty}
+            loading={loading}
+            loadingText={t("status.resizing")}
+            text={isEmpty ? t("action.resize") : t("action.resize_n", { n: files.length })}
+            icon={<Scaling className="h-4 w-4" strokeWidth={1.5} />}
+          />
+        }
+      >
         <div className="flex gap-2 flex-wrap">
           {MODE_KEYS.map((opt) => (
             <button
@@ -186,18 +216,7 @@ export function ResizeTab() {
             <span className="forge-hint">{t("label.px")}</span>
           </div>
         )}
-      </div>
-
-      <ActionButton
-        onClick={handleResize}
-        disabled={files.length === 0}
-        loading={loading}
-        loadingText={t("status.resizing")}
-        text={files.length > 0 ? t("action.resize_n", { n: files.length }) : t("action.resize")}
-        icon={<Scaling className="h-4 w-4" strokeWidth={1.5} />}
-      />
-
-      <ResultsBanner results={results} total={files.length} outputDir={lastOutputDir} />
+      </ControlsPanel>
     </div>
   );
 }
