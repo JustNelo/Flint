@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Loader2, ShieldOff, MapPin } from "lucide-react";
 import { ActionButton } from "./ui/ActionButton";
@@ -25,43 +25,64 @@ export function ExifStripTab() {
   } = useTabProcessor({ tabId: "strip", command: "strip_metadata" });
   const [metadataList, setMetadataList] = useState<ImageMetadata[]>([]);
   const [loadingMeta, setLoadingMeta] = useState(false);
+  // Per-path metadata cache so adding a batch only reads the NEW files instead
+  // of re-scanning the whole selection on every change.
+  const metaCacheRef = useRef<Map<string, ImageMetadata>>(new Map());
+  const metaReqRef = useRef(0);
 
   const handleClearFiles = useCallback(() => {
     baseClear();
+    metaCacheRef.current = new Map();
     setMetadataList([]);
   }, [baseClear]);
 
   useEffect(() => {
+    const token = ++metaReqRef.current;
+
     if (files.length === 0) {
+      metaCacheRef.current = new Map();
       setMetadataList([]);
+      setLoadingMeta(false);
       return;
     }
 
-    let cancelled = false;
+    // Drop cached entries no longer selected so the cache can't grow unbounded.
+    const pruned = new Map<string, ImageMetadata>();
+    for (const f of files) {
+      const cached = metaCacheRef.current.get(f);
+      if (cached) pruned.set(f, cached);
+    }
+    metaCacheRef.current = pruned;
+
+    // Build the visible list in file order from whatever is already cached.
+    const orderedFromCache = () =>
+      files.map((f) => metaCacheRef.current.get(f)).filter((m): m is ImageMetadata => m !== undefined);
+
+    const missing = files.filter((f) => !metaCacheRef.current.has(f));
+    setMetadataList(orderedFromCache());
+
+    if (missing.length === 0) {
+      setLoadingMeta(false);
+      return;
+    }
+
+    // Read only the newly-added files, in parallel (read_metadata is a
+    // spawn_blocking command, so concurrent calls are safe).
     setLoadingMeta(true);
-
-    (async () => {
-      const results: ImageMetadata[] = [];
-      for (const file of files) {
-        if (cancelled) break;
-        try {
-          const meta = await invoke<ImageMetadata>("read_metadata", {
-            filePath: file,
-          });
-          results.push(meta);
-        } catch {
-          // skip files that can't be read
-        }
+    Promise.all(
+      missing.map((file) =>
+        invoke<ImageMetadata>("read_metadata", { filePath: file })
+          .then((meta) => ({ file, meta }))
+          .catch(() => ({ file, meta: null as ImageMetadata | null })),
+      ),
+    ).then((entries) => {
+      if (token !== metaReqRef.current) return; // superseded by a newer change
+      for (const { file, meta } of entries) {
+        if (meta) metaCacheRef.current.set(file, meta);
       }
-      if (!cancelled) {
-        setMetadataList(results);
-        setLoadingMeta(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+      setMetadataList(orderedFromCache());
+      setLoadingMeta(false);
+    });
   }, [files]);
 
   const totalExifFields = metadataList.reduce((acc, m) => acc + m.exif.length, 0);
