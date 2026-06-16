@@ -25,7 +25,7 @@
   /* Text (neutres chauds) */
   --text-primary: #f3eee8;
   --text-secondary: #a89a8c;
-  --text-tertiary: #7a6e62;
+  --text-tertiary: #8c7e70;
 
   /* States */
   --success: #22c55e;
@@ -52,7 +52,7 @@
 
   --flint-text-primary: #f3eee8;
   --flint-text-secondary: #a89a8c;
-  --flint-text-muted: #7a6e62;
+  --flint-text-muted: #8c7e70;
   --flint-text-faint: #564b40;
   --flint-text-ghost: #3a302a;
 
