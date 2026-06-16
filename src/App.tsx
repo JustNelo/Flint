@@ -142,6 +142,8 @@ const ETABLI_TOOLS = new Set<TabId>([
   "svg-rasterize",
   "favicon",
   "spritesheet",
+  "strip",
+  "bulk-rename",
 ]);
 
 const TAB_LABEL_KEYS: Record<TabId, string> = {
@@ -272,6 +274,8 @@ function App() {
             {activeTab === "svg-rasterize" && <SvgRasterizeTab />}
             {activeTab === "favicon" && <FaviconTab />}
             {activeTab === "spritesheet" && <SpriteSheetTab />}
+            {activeTab === "strip" && <ExifStripTab />}
+            {activeTab === "bulk-rename" && <BulkRenameTab />}
           </div>
         ) : (
           <div className="mx-auto" style={{ maxWidth: 860 }}>
@@ -293,13 +297,11 @@ function App() {
             </div>
 
             {activeTab === "crop" && <CropTab />}
-            {activeTab === "strip" && <ExifStripTab />}
             {activeTab === "pdf-toolkit" && <PdfWorkbenchTab />}
             {activeTab === "palette" && <PaletteTab />}
             {activeTab === "animation" && <AnimationTab />}
             {activeTab === "base64" && <Base64Tab />}
             {activeTab === "qrcode" && <QrCodeTab />}
-            {activeTab === "bulk-rename" && <BulkRenameTab />}
           </div>
         )}
       </WorkbenchShell>
