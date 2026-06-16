@@ -106,7 +106,12 @@ Le panneau central vit en 4 temps :
 |---|---|
 | primary | `#F3EEE8` |
 | secondary | `#A89A8C` |
-| tertiary | `#7A6E62` |
+| tertiary | `#8C7E70` |
+
+> Note (Phase 0) : `tertiary` (et son alias `--flint-text-muted`) ont été relevés de
+> `#7A6E62` à `#8C7E70` à l'implémentation pour passer le contraste WCAG AA (~4.8:1) sur le
+> fond chaud. `--flint-bg-elevated` (`#2a1a14`) reste volontairement un peu plus chaud que
+> `--bg-elevated` (`#251d17`) : c'est la surface « élevée accent » des dégradés actifs.
 
 ### Règles
 - **Lueur de chauffe retenue** : glow ember **uniquement** sur l'outil actif, le CTA et l'état
