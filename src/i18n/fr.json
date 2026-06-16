@@ -420,5 +420,9 @@
   "label.password_medium": "Moyen",
   "label.password_strong": "Fort",
   "label.dpi_value": "{n} DPI",
-  "result.no_reduction": "Aucune réduction"
+  "result.no_reduction": "Aucune réduction",
+
+  "etabli.material": "Matériel",
+  "etabli.results": "Résultats",
+  "etabli.settings": "Réglages"
 }
