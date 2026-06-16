@@ -133,7 +133,16 @@ const TAB_DESC_KEYS: Record<TabId, string> = {
 };
 
 // Tools migrated to the full-width Établi 2-pane layout (others use the centered column).
-const ETABLI_TOOLS = new Set<TabId>(["compress", "convert", "optimize", "resize", "watermark"]);
+const ETABLI_TOOLS = new Set<TabId>([
+  "compress",
+  "convert",
+  "optimize",
+  "resize",
+  "watermark",
+  "svg-rasterize",
+  "favicon",
+  "spritesheet",
+]);
 
 const TAB_LABEL_KEYS: Record<TabId, string> = {
   compress: "tab.compress",
@@ -260,6 +269,9 @@ function App() {
             {activeTab === "optimize" && <OptimizeTab />}
             {activeTab === "resize" && <ResizeTab />}
             {activeTab === "watermark" && <WatermarkTab />}
+            {activeTab === "svg-rasterize" && <SvgRasterizeTab />}
+            {activeTab === "favicon" && <FaviconTab />}
+            {activeTab === "spritesheet" && <SpriteSheetTab />}
           </div>
         ) : (
           <div className="mx-auto" style={{ maxWidth: 860 }}>
@@ -284,13 +296,10 @@ function App() {
             {activeTab === "strip" && <ExifStripTab />}
             {activeTab === "pdf-toolkit" && <PdfWorkbenchTab />}
             {activeTab === "palette" && <PaletteTab />}
-            {activeTab === "favicon" && <FaviconTab />}
             {activeTab === "animation" && <AnimationTab />}
-            {activeTab === "spritesheet" && <SpriteSheetTab />}
             {activeTab === "base64" && <Base64Tab />}
             {activeTab === "qrcode" && <QrCodeTab />}
             {activeTab === "bulk-rename" && <BulkRenameTab />}
-            {activeTab === "svg-rasterize" && <SvgRasterizeTab />}
           </div>
         )}
       </WorkbenchShell>
