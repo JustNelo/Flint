@@ -6,6 +6,8 @@ import { DropZone } from "./DropZone";
 import { ImageGrid } from "./ImageGrid";
 import { ResultsBanner } from "./ResultsBanner";
 import { ActionButton } from "./ui/ActionButton";
+import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
+import { ControlsPanel } from "./ControlsPanel";
 import { useFileSelection } from "../hooks/useFileSelection";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useHistory } from "../hooks/useHistory";
@@ -52,6 +54,7 @@ export function CropTab() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ProcessingResult[]>([]);
   const [lastOutputDir, setLastOutputDir] = useState("");
+  const [panelMode, setPanelMode] = useState<MaterialMode>("material");
 
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
   const [sel, setSel] = useState<Rect>({ ...DEFAULT_RECT });
@@ -76,6 +79,7 @@ export function CropTab() {
       setResults([]);
       setSel({ ...DEFAULT_RECT });
       setNaturalSize(null);
+      setPanelMode("material");
     },
     [addFiles, clearFiles],
   );
@@ -85,6 +89,7 @@ export function CropTab() {
     setResults([]);
     setSel({ ...DEFAULT_RECT });
     setNaturalSize(null);
+    setPanelMode("material");
   }, [clearFiles]);
 
   const handleImageLoad = useCallback(() => {
@@ -295,6 +300,7 @@ export function CropTab() {
       });
 
       setResults(result.results);
+      if (result.results.length > 0) setPanelMode("results");
 
       const successCount = result.results.filter((r) => r.success).length;
       const failCount = result.results.filter((r) => !r.success).length;
@@ -314,143 +320,168 @@ export function CropTab() {
     }
   }, [files, pixelRect, getOutputDir, addEntry, t]);
 
+  const isEmpty = files.length === 0;
+
   // ── Render ───────────────────────────────────────────────────────────
   return (
-    <div className="space-y-5">
-      <DropZone
-        accept="png,jpg,jpeg,bmp,tiff,tif,webp"
-        label={t("dropzone.images_crop")}
-        sublabel={t("dropzone.sublabel_crop")}
-        onFilesSelected={handleFilesSelected}
-      />
-
-      <ImageGrid files={files} onReorder={reorderFiles} onRemove={removeFile} onClear={handleClearFiles} />
-
-      {/* Interactive crop canvas */}
-      {files.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] text-neutral-500">{t("label.crop_draw_hint")}</span>
-            <button
-              onClick={resetSelection}
-              className="flex items-center gap-1 cursor-pointer forge-hint"
-              style={{ transition: "color 150ms ease" }}
-            >
-              <RotateCcw className="h-3 w-3" strokeWidth={1.5} />
-              {t("label.reset")}
-            </button>
-          </div>
-
-          <div
-            ref={containerRef}
-            className="relative overflow-hidden select-none touch-none"
-            style={{ borderRadius: 12, border: "1px solid var(--bg-border)", background: "var(--bg-base)", cursor }}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-          >
-            <img
-              ref={imgRef}
-              src={safeAssetUrl(files[0])}
-              alt=""
-              onLoad={handleImageLoad}
-              className="w-full max-h-112 object-contain pointer-events-none"
-              draggable={false}
+    <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+      <MaterialPanel
+        mode={panelMode}
+        onModeChange={setPanelMode}
+        hasResults={results.length > 0}
+        material={
+          <div className="space-y-3">
+            <DropZone
+              accept="png,jpg,jpeg,bmp,tiff,tif,webp"
+              label={isEmpty ? t("dropzone.images_crop") : t("dropzone.add_more")}
+              sublabel={t("dropzone.sublabel_crop")}
+              compact={!isEmpty}
+              multiple={false}
+              onFilesSelected={handleFilesSelected}
             />
 
-            {/* Dark overlay with cut-out — positioned in px relative to rendered image */}
-            {sel.w > 0 && sel.h > 0 && imgBounds && (
-              <div
-                className="absolute border-2 border-white/60 shadow-[0_0_0_9999px_rgba(0,0,0,0.55)] pointer-events-none"
-                style={{
-                  left: imgBounds.oX + sel.x * imgBounds.rW,
-                  top: imgBounds.oY + sel.y * imgBounds.rH,
-                  width: sel.w * imgBounds.rW,
-                  height: sel.h * imgBounds.rH,
-                }}
-              >
-                {/* Rule-of-thirds grid lines */}
-                <div className="absolute inset-0 pointer-events-none">
-                  <div className="absolute left-1/3 top-0 bottom-0 w-px bg-white/15" />
-                  <div className="absolute left-2/3 top-0 bottom-0 w-px bg-white/15" />
-                  <div className="absolute top-1/3 left-0 right-0 h-px bg-white/15" />
-                  <div className="absolute top-2/3 left-0 right-0 h-px bg-white/15" />
+            <ImageGrid files={files} onReorder={reorderFiles} onRemove={removeFile} onClear={handleClearFiles} />
+
+            {/* Interactive crop canvas */}
+            {files.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-neutral-500">{t("label.crop_draw_hint")}</span>
+                  <button
+                    onClick={resetSelection}
+                    className="flex items-center gap-1 cursor-pointer forge-hint"
+                    style={{ transition: "color 150ms ease" }}
+                  >
+                    <RotateCcw className="h-3 w-3" strokeWidth={1.5} />
+                    {t("label.reset")}
+                  </button>
                 </div>
 
-                {/* 8 resize handles */}
-                {/* Corners */}
-                <div className="absolute -top-1.5 -left-1.5 h-3 w-3 border-2 border-white bg-white rounded-sm" />
-                <div className="absolute -top-1.5 -right-1.5 h-3 w-3 border-2 border-white bg-white rounded-sm" />
-                <div className="absolute -bottom-1.5 -left-1.5 h-3 w-3 border-2 border-white bg-white rounded-sm" />
-                <div className="absolute -bottom-1.5 -right-1.5 h-3 w-3 border-2 border-white bg-white rounded-sm" />
-                {/* Edge midpoints */}
-                <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 h-2 w-5 bg-white rounded-full" />
-                <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 h-2 w-5 bg-white rounded-full" />
-                <div className="absolute top-1/2 -left-1.5 -translate-y-1/2 w-2 h-5 bg-white rounded-full" />
-                <div className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-2 h-5 bg-white rounded-full" />
-              </div>
-            )}
+                <div
+                  ref={containerRef}
+                  className="relative overflow-hidden select-none touch-none"
+                  style={{
+                    borderRadius: 12,
+                    border: "1px solid var(--bg-border)",
+                    background: "var(--bg-base)",
+                    cursor,
+                  }}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                >
+                  <img
+                    ref={imgRef}
+                    src={safeAssetUrl(files[0])}
+                    alt=""
+                    onLoad={handleImageLoad}
+                    className="w-full max-h-112 object-contain pointer-events-none"
+                    draggable={false}
+                  />
 
-            {/* Pixel info badge */}
-            {pixelRect && (
-              <div className="absolute bottom-2 right-2 rounded-md bg-black/80 px-2 py-0.5 text-[10px] font-mono text-white/80 backdrop-blur-sm pointer-events-none">
-                {pixelRect.w} × {pixelRect.h}px
-              </div>
-            )}
-          </div>
+                  {/* Dark overlay with cut-out — positioned in px relative to rendered image */}
+                  {sel.w > 0 && sel.h > 0 && imgBounds && (
+                    <div
+                      className="absolute border-2 border-white/60 shadow-[0_0_0_9999px_rgba(0,0,0,0.55)] pointer-events-none"
+                      style={{
+                        left: imgBounds.oX + sel.x * imgBounds.rW,
+                        top: imgBounds.oY + sel.y * imgBounds.rH,
+                        width: sel.w * imgBounds.rW,
+                        height: sel.h * imgBounds.rH,
+                      }}
+                    >
+                      {/* Rule-of-thirds grid lines */}
+                      <div className="absolute inset-0 pointer-events-none">
+                        <div className="absolute left-1/3 top-0 bottom-0 w-px bg-white/15" />
+                        <div className="absolute left-2/3 top-0 bottom-0 w-px bg-white/15" />
+                        <div className="absolute top-1/3 left-0 right-0 h-px bg-white/15" />
+                        <div className="absolute top-2/3 left-0 right-0 h-px bg-white/15" />
+                      </div>
 
-          {/* Numeric crop inputs + original size */}
-          <div className="flex items-center justify-between gap-4">
-            {pixelRect && naturalSize && (
-              <div className="flex items-center gap-2">
-                {(["x", "y", "w", "h"] as const).map((field) => {
-                  const labelMap = { x: "X", y: "Y", w: t("label.width"), h: t("label.height") };
-                  const maxMap = { x: naturalSize.w, y: naturalSize.h, w: naturalSize.w, h: naturalSize.h };
-                  return (
-                    <div key={field} className="flex items-center gap-1">
-                      <label className="text-[10px] text-neutral-500">{labelMap[field]}</label>
-                      <input
-                        type="number"
-                        min={field === "w" || field === "h" ? 1 : 0}
-                        max={maxMap[field]}
-                        value={pixelRect[field]}
-                        onChange={(e) => {
-                          const v = Math.max(0, Math.min(Number(e.target.value) || 0, maxMap[field]));
-                          setSel((prev) => {
-                            if (field === "x") return { ...prev, x: v / naturalSize.w };
-                            if (field === "y") return { ...prev, y: v / naturalSize.h };
-                            if (field === "w") return { ...prev, w: Math.max(1 / naturalSize.w, v / naturalSize.w) };
-                            return { ...prev, h: Math.max(1 / naturalSize.h, v / naturalSize.h) };
-                          });
-                        }}
-                        className="forge-input text-center"
-                        style={{ width: 64, flex: "none", padding: "2px 6px", fontSize: 10 }}
-                      />
+                      {/* 8 resize handles */}
+                      {/* Corners */}
+                      <div className="absolute -top-1.5 -left-1.5 h-3 w-3 border-2 border-white bg-white rounded-sm" />
+                      <div className="absolute -top-1.5 -right-1.5 h-3 w-3 border-2 border-white bg-white rounded-sm" />
+                      <div className="absolute -bottom-1.5 -left-1.5 h-3 w-3 border-2 border-white bg-white rounded-sm" />
+                      <div className="absolute -bottom-1.5 -right-1.5 h-3 w-3 border-2 border-white bg-white rounded-sm" />
+                      {/* Edge midpoints */}
+                      <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 h-2 w-5 bg-white rounded-full" />
+                      <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 h-2 w-5 bg-white rounded-full" />
+                      <div className="absolute top-1/2 -left-1.5 -translate-y-1/2 w-2 h-5 bg-white rounded-full" />
+                      <div className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-2 h-5 bg-white rounded-full" />
                     </div>
-                  );
-                })}
-                <span className="text-[10px] text-neutral-500">px</span>
-              </div>
-            )}
-            {naturalSize && (
-              <div className="text-[10px] text-neutral-500">
-                {naturalSize.w} × {naturalSize.h}px
+                  )}
+
+                  {/* Pixel info badge */}
+                  {pixelRect && (
+                    <div className="absolute bottom-2 right-2 rounded-md bg-black/80 px-2 py-0.5 text-[10px] font-mono text-white/80 backdrop-blur-sm pointer-events-none">
+                      {pixelRect.w} × {pixelRect.h}px
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      <ActionButton
-        onClick={handleCrop}
-        disabled={files.length === 0 || !pixelRect}
-        loading={loading}
-        loadingText={t("status.cropping")}
-        text={files.length > 0 ? t("action.crop_n", { n: files.length }) : t("action.crop")}
-        icon={<Crop className="h-4 w-4" strokeWidth={1.5} />}
+        }
+        results={<ResultsBanner results={results} total={files.length} outputDir={lastOutputDir} />}
       />
 
-      <ResultsBanner results={results} total={files.length} outputDir={lastOutputDir} />
+      <ControlsPanel
+        disabled={isEmpty}
+        action={
+          <ActionButton
+            onClick={handleCrop}
+            disabled={files.length === 0 || !pixelRect}
+            loading={loading}
+            loadingText={t("status.cropping")}
+            text={files.length > 0 ? t("action.crop_n", { n: files.length }) : t("action.crop")}
+            icon={<Crop className="h-4 w-4" strokeWidth={1.5} />}
+          />
+        }
+      >
+        {pixelRect && naturalSize ? (
+          <div className="space-y-2">
+            <label
+              className="font-semibold uppercase"
+              style={{ fontSize: 9, letterSpacing: "0.08em", color: "var(--text-tertiary)" }}
+            >
+              {t("label.crop_draw_hint")}
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              {(["x", "y", "w", "h"] as const).map((field) => {
+                const labelMap = { x: "X", y: "Y", w: t("label.width"), h: t("label.height") };
+                const maxMap = { x: naturalSize.w, y: naturalSize.h, w: naturalSize.w, h: naturalSize.h };
+                return (
+                  <div key={field} className="space-y-1.5">
+                    <label className="forge-label">{labelMap[field]}</label>
+                    <input
+                      type="number"
+                      min={field === "w" || field === "h" ? 1 : 0}
+                      max={maxMap[field]}
+                      value={pixelRect[field]}
+                      onChange={(e) => {
+                        const v = Math.max(0, Math.min(Number(e.target.value) || 0, maxMap[field]));
+                        setSel((prev) => {
+                          if (field === "x") return { ...prev, x: v / naturalSize.w };
+                          if (field === "y") return { ...prev, y: v / naturalSize.h };
+                          if (field === "w") return { ...prev, w: Math.max(1 / naturalSize.w, v / naturalSize.w) };
+                          return { ...prev, h: Math.max(1 / naturalSize.h, v / naturalSize.h) };
+                        });
+                      }}
+                      className="forge-input w-full"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            <p style={{ fontSize: 10, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>
+              {naturalSize.w} × {naturalSize.h}px
+            </p>
+          </div>
+        ) : (
+          <p style={{ fontSize: "var(--text-sm)", color: "var(--text-tertiary)" }}>{t("label.crop_draw_hint")}</p>
+        )}
+      </ControlsPanel>
     </div>
   );
 }
