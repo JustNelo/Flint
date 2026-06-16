@@ -234,41 +234,62 @@ function App() {
           />
         }
       >
-        <div className="mx-auto" style={{ maxWidth: 860 }}>
-          <div style={{ marginBottom: 24 }}>
-            <h2
-              style={{
-                fontSize: "var(--text-xl)",
-                fontWeight: 600,
-                color: "var(--text-primary)",
-                letterSpacing: "-0.01em",
-                lineHeight: 1.3,
-              }}
-            >
-              {t(TAB_LABEL_KEYS[activeTab])}
-            </h2>
-            <p style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
-              {t(TAB_DESC_KEYS[activeTab])}
-            </p>
+        {activeTab === "compress" ? (
+          <div>
+            <div style={{ marginBottom: 24 }}>
+              <h2
+                style={{
+                  fontSize: "var(--text-xl)",
+                  fontWeight: 600,
+                  color: "var(--text-primary)",
+                  letterSpacing: "-0.01em",
+                  lineHeight: 1.3,
+                }}
+              >
+                {t(TAB_LABEL_KEYS[activeTab])}
+              </h2>
+              <p style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
+                {t(TAB_DESC_KEYS[activeTab])}
+              </p>
+            </div>
+            <CompressTab />
           </div>
+        ) : (
+          <div className="mx-auto" style={{ maxWidth: 860 }}>
+            <div style={{ marginBottom: 24 }}>
+              <h2
+                style={{
+                  fontSize: "var(--text-xl)",
+                  fontWeight: 600,
+                  color: "var(--text-primary)",
+                  letterSpacing: "-0.01em",
+                  lineHeight: 1.3,
+                }}
+              >
+                {t(TAB_LABEL_KEYS[activeTab])}
+              </h2>
+              <p style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
+                {t(TAB_DESC_KEYS[activeTab])}
+              </p>
+            </div>
 
-          {activeTab === "compress" && <CompressTab />}
-          {activeTab === "convert" && <ConvertTab />}
-          {activeTab === "resize" && <ResizeTab />}
-          {activeTab === "crop" && <CropTab />}
-          {activeTab === "optimize" && <OptimizeTab />}
-          {activeTab === "watermark" && <WatermarkTab />}
-          {activeTab === "strip" && <ExifStripTab />}
-          {activeTab === "pdf-toolkit" && <PdfWorkbenchTab />}
-          {activeTab === "palette" && <PaletteTab />}
-          {activeTab === "favicon" && <FaviconTab />}
-          {activeTab === "animation" && <AnimationTab />}
-          {activeTab === "spritesheet" && <SpriteSheetTab />}
-          {activeTab === "base64" && <Base64Tab />}
-          {activeTab === "qrcode" && <QrCodeTab />}
-          {activeTab === "bulk-rename" && <BulkRenameTab />}
-          {activeTab === "svg-rasterize" && <SvgRasterizeTab />}
-        </div>
+            {activeTab === "convert" && <ConvertTab />}
+            {activeTab === "resize" && <ResizeTab />}
+            {activeTab === "crop" && <CropTab />}
+            {activeTab === "optimize" && <OptimizeTab />}
+            {activeTab === "watermark" && <WatermarkTab />}
+            {activeTab === "strip" && <ExifStripTab />}
+            {activeTab === "pdf-toolkit" && <PdfWorkbenchTab />}
+            {activeTab === "palette" && <PaletteTab />}
+            {activeTab === "favicon" && <FaviconTab />}
+            {activeTab === "animation" && <AnimationTab />}
+            {activeTab === "spritesheet" && <SpriteSheetTab />}
+            {activeTab === "base64" && <Base64Tab />}
+            {activeTab === "qrcode" && <QrCodeTab />}
+            {activeTab === "bulk-rename" && <BulkRenameTab />}
+            {activeTab === "svg-rasterize" && <SvgRasterizeTab />}
+          </div>
+        )}
       </WorkbenchShell>
 
       <SplashScreen visible={isLoading} />
