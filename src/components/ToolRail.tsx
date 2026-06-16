@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Search, PanelLeftOpen, PanelLeftClose } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { usePersistedState } from "../hooks/usePersistedState";
@@ -30,6 +31,7 @@ export function ToolRail({ sections, activeTab, onSelect, onOpenCommand, appVers
   const { t } = useT();
   const [pinned, setPinned] = usePersistedState<boolean>("rail_pinned", false);
   const width = pinned ? EXPANDED_W : COLLAPSED_W;
+  const [hoveredId, setHoveredId] = useState<TabId | null>(null);
 
   return (
     <aside
@@ -98,6 +100,7 @@ export function ToolRail({ sections, activeTab, onSelect, onOpenCommand, appVers
             {section.tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
+              const isHovered = hoveredId === tab.id;
               return (
                 <button
                   key={tab.id}
@@ -116,16 +119,14 @@ export function ToolRail({ sections, activeTab, onSelect, onOpenCommand, appVers
                     transition: "background 150ms ease, color 150ms ease",
                     background: isActive
                       ? "linear-gradient(90deg, var(--flint-bg-elevated), transparent)"
-                      : "transparent",
+                      : isHovered
+                        ? "var(--bg-overlay)"
+                        : "transparent",
                     color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
                     border: "none",
                   }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.background = "var(--bg-overlay)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.background = "transparent";
-                  }}
+                  onMouseEnter={() => setHoveredId(tab.id)}
+                  onMouseLeave={() => setHoveredId(null)}
                 >
                   <span
                     className="absolute left-0 top-1/2 -translate-y-1/2"
