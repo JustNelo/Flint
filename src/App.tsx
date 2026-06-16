@@ -133,7 +133,7 @@ const TAB_DESC_KEYS: Record<TabId, string> = {
 };
 
 // Tools migrated to the full-width Établi 2-pane layout (others use the centered column).
-const ETABLI_TOOLS = new Set<TabId>(["compress", "convert"]);
+const ETABLI_TOOLS = new Set<TabId>(["compress", "convert", "optimize", "resize", "watermark"]);
 
 const TAB_LABEL_KEYS: Record<TabId, string> = {
   compress: "tab.compress",
@@ -257,6 +257,9 @@ function App() {
             </div>
             {activeTab === "compress" && <CompressTab />}
             {activeTab === "convert" && <ConvertTab />}
+            {activeTab === "optimize" && <OptimizeTab />}
+            {activeTab === "resize" && <ResizeTab />}
+            {activeTab === "watermark" && <WatermarkTab />}
           </div>
         ) : (
           <div className="mx-auto" style={{ maxWidth: 860 }}>
@@ -277,10 +280,7 @@ function App() {
               </p>
             </div>
 
-            {activeTab === "resize" && <ResizeTab />}
             {activeTab === "crop" && <CropTab />}
-            {activeTab === "optimize" && <OptimizeTab />}
-            {activeTab === "watermark" && <WatermarkTab />}
             {activeTab === "strip" && <ExifStripTab />}
             {activeTab === "pdf-toolkit" && <PdfWorkbenchTab />}
             {activeTab === "palette" && <PaletteTab />}
