@@ -95,7 +95,13 @@ export const ResultsBanner = memo(function ResultsBanner({ results, total, outpu
                 <div
                   key={i}
                   className="group relative overflow-hidden aspect-square cursor-pointer"
-                  style={{ borderRadius: 8, border: "1px solid var(--bg-border)", background: "var(--bg-overlay)" }}
+                  style={{
+                    borderRadius: 8,
+                    border: "1px solid var(--bg-border)",
+                    background: "var(--bg-overlay)",
+                    contentVisibility: "auto",
+                    containIntrinsicSize: "auto 120px",
+                  }}
                   onClick={() => canPreview && setPreviewResult(r)}
                 >
                   {canPreview ? (
@@ -103,6 +109,7 @@ export const ResultsBanner = memo(function ResultsBanner({ results, total, outpu
                       src={safeAssetUrl(r.output_path, true)}
                       alt={outName}
                       loading="lazy"
+                      decoding="async"
                       className="h-full w-full object-cover"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";

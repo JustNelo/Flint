@@ -148,6 +148,7 @@ export function CompressTab() {
           paddingTop: 12,
           paddingBottom: 4,
           background: "linear-gradient(to top, var(--bg-base) 65%, transparent)",
+          contain: "paint",
         }}
       >
         <ActionButton

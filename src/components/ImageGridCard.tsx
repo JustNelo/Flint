@@ -32,7 +32,12 @@ export const ImageGridCard = memo(
       borderRadius: 8,
       border: "1px solid var(--bg-border)",
       background: "var(--bg-overlay)",
-    };
+      // Skip rendering/decoding cards that are scrolled out of view (kept active
+      // while dragging so dnd-kit can move them). `auto` length remembers the
+      // real size once painted, so the scrollbar doesn't jump.
+      contentVisibility: isDragging ? "visible" : "auto",
+      containIntrinsicSize: "auto 140px",
+    } as React.CSSProperties;
 
     return (
       <div
@@ -79,6 +84,7 @@ export const ImageGridCard = memo(
           src={safeAssetUrl(filePath)}
           alt={fileName}
           loading="lazy"
+          decoding="async"
           draggable={false}
           className="h-full w-full object-cover"
           onError={(e) => {
