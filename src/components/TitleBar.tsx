@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Minus, Square, X, Clock, Settings } from "lucide-react";
-import icon from "../assets/icon.png";
+import { FlintLogo } from "./FlintLogo";
 
 interface TitleBarProps {
   onShowHistory?: () => void;
@@ -44,7 +44,7 @@ export function TitleBar({ onShowHistory, onShowSettings }: TitleBarProps) {
       style={{ height: 36, background: "var(--bg-surface)", borderBottom: "1px solid var(--bg-border)" }}
     >
       <div className="flex items-center gap-2 px-3 pointer-events-none">
-        <img src={icon} alt="Icon" className="h-4 w-4" />
+        <FlintLogo size={16} />
         <span
           style={{
             fontSize: "var(--text-sm)",
@@ -54,7 +54,7 @@ export function TitleBar({ onShowHistory, onShowSettings }: TitleBarProps) {
             letterSpacing: "-0.01em",
           }}
         >
-          Rust-ine
+          Flint
         </span>
       </div>
 

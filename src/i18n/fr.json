@@ -1,5 +1,5 @@
 {
-  "app.name": "Rust-ine",
+  "app.name": "Flint",
   "app.tagline": "Couteau suisse image & PDF",
 
   "section.image_tools": "Outils Image",
@@ -210,7 +210,7 @@
   "settings.theme_light": "Clair",
   "settings.version": "Version",
 
-  "onboarding.welcome": "Bienvenue dans Rust-ine",
+  "onboarding.welcome": "Bienvenue dans Flint",
   "onboarding.welcome_sub": "Traitement d'images & PDF, rapide et local.",
   "onboarding.language": "Choisissez votre langue",
   "onboarding.workspace_title": "Votre espace de travail",
@@ -234,6 +234,14 @@
   "sidebar.hint": "Glissez-déposez vos fichiers ou utilisez Ctrl+O.",
   "sidebar.hint_short": "Ctrl+O · Glisser-déposer",
   "sidebar.workspace": "Espace de travail",
+  "sidebar.cmdk_hint": "⌘K · Recherche rapide",
+
+  "cmd.placeholder": "Rechercher un outil...",
+  "cmd.empty": "Aucun outil trouvé",
+
+  "dropzone.rejected": "{n} fichier(s) ignoré(s) — format non pris en charge",
+  "dropzone.add_more": "Déposez d'autres fichiers ou cliquez pour ajouter",
+  "action.ready_hint": "Ctrl+Entrée ↵",
 
   "label.scale": "Échelle",
   "label.px": "px",

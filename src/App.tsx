@@ -18,8 +18,10 @@ import {
   QrCode,
   PenLine,
   FileImage,
+  Search,
 } from "lucide-react";
 import { TitleBar } from "./components/TitleBar";
+import { CommandPalette, type CommandTool } from "./components/CommandPalette";
 import { CompressTab } from "./components/CompressTab";
 import { ConvertTab } from "./components/ConvertTab";
 import { ResizeTab } from "./components/ResizeTab";
@@ -161,6 +163,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     try {
       return localStorage.getItem("rustine_onboarded") !== "1";
@@ -176,6 +179,31 @@ function App() {
       .catch(() => {});
     return () => clearTimeout(timer);
   }, []);
+
+  // ⌘K / Ctrl+K — toggle the command palette
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setCmdOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  const commandTools = useMemo<CommandTool[]>(
+    () =>
+      SIDEBAR_SECTIONS.flatMap((section) =>
+        section.tabs.map((tab) => ({
+          id: tab.id,
+          label: t(tab.labelKey),
+          category: t(section.titleKey),
+          icon: tab.icon,
+        })),
+      ),
+    [t],
+  );
 
   const activeExtensions = useMemo(() => TAB_EXTENSIONS[activeTab], [activeTab]);
 
@@ -198,8 +226,55 @@ function App() {
         {/* Sidebar */}
         <aside
           className="flex shrink-0 flex-col"
-          style={{ width: 200, background: "var(--bg-surface)", borderRight: "1px solid var(--bg-border)" }}
+          style={{
+            width: 200,
+            background: "var(--flint-sidebar-bg)",
+            borderRight: "1px solid var(--flint-sidebar-border)",
+          }}
         >
+          {/* Sidebar header — quick-search trigger (opens ⌘K palette) */}
+          <div style={{ padding: "10px 10px 8px" }}>
+            <button
+              onClick={() => setCmdOpen(true)}
+              className="flex items-center w-full cursor-pointer"
+              style={{
+                gap: 8,
+                height: 30,
+                padding: "0 10px",
+                borderRadius: 6,
+                background: "var(--bg-overlay)",
+                border: "1px solid var(--flint-sidebar-border)",
+                color: "var(--text-tertiary)",
+                transition: "all 150ms ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--flint-border-accent)";
+                e.currentTarget.style.color = "var(--text-secondary)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--flint-sidebar-border)";
+                e.currentTarget.style.color = "var(--text-tertiary)";
+              }}
+            >
+              <Search style={{ width: 13, height: 13, flexShrink: 0 }} strokeWidth={1.5} />
+              <span style={{ flex: 1, textAlign: "left", fontSize: 11, fontFamily: "var(--font-sans)" }}>
+                {t("cmd.placeholder")}
+              </span>
+              <kbd
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 9,
+                  padding: "2px 5px",
+                  borderRadius: 4,
+                  background: "var(--bg-base)",
+                  color: "var(--text-tertiary)",
+                }}
+              >
+                ⌘K
+              </kbd>
+            </button>
+          </div>
+
           <nav className="flex flex-col gap-0.5 px-2 mt-1 flex-1 overflow-y-auto">
             {SIDEBAR_SECTIONS.map((section) => (
               <div key={section.titleKey} className="mb-1">
@@ -228,8 +303,10 @@ function App() {
                         fontWeight: 500,
                         fontFamily: "var(--font-sans)",
                         transition: "all 150ms ease",
-                        background: isActive ? "var(--glass-bg)" : "transparent",
-                        color: isActive ? "var(--indigo-glow)" : "var(--text-secondary)",
+                        background: isActive
+                          ? "linear-gradient(90deg, var(--flint-bg-elevated), transparent)"
+                          : "transparent",
+                        color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
                         border: "none",
                       }}
                       onMouseEnter={(e) => {
@@ -330,6 +407,16 @@ function App() {
 
       <SplashScreen visible={isLoading} />
       <GlobalProgressBar />
+
+      <CommandPalette
+        open={cmdOpen}
+        tools={commandTools}
+        onClose={() => setCmdOpen(false)}
+        onNavigate={(id) => {
+          setActiveTab(id);
+          setCmdOpen(false);
+        }}
+      />
 
       {showHistory && <HistoryModal onClose={() => setShowHistory(false)} />}
       {showSettings && (

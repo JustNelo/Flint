@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Rust-ine",
+  "productName": "Flint",
   "version": "2.2.0",
   "identifier": "com.leong.rust-ine",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Rust-ine",
+        "title": "Flint",
         "width": 1280,
         "height": 860,
         "minWidth": 900,
@@ -64,7 +64,7 @@
       "icons/icon.ico"
     ],
     "shortDescription": "Image compression, conversion and PDF extraction tool",
-    "longDescription": "Rust-ine is a desktop application for batch image compression to WebP, format conversion between PNG, JPG, WebP, BMP, ICO and TIFF, and embedded image extraction from PDF files. Built with Tauri v2 and powered by parallel Rust processing.",
+    "longDescription": "Flint is a desktop application for batch image compression to WebP, format conversion between PNG, JPG, WebP, BMP, ICO and TIFF, and embedded image extraction from PDF files. Built with Tauri v2 and powered by parallel Rust processing.",
     "copyright": "Copyright 2026 Leon Gallet",
     "category": "Utility",
     "windows": {

@@ -3,7 +3,7 @@ import { ChevronRight, ChevronLeft, FolderOpen, ImageIcon, FileText, Code2, Chec
 import { useT, type Lang } from "../i18n/i18n";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { GlassModal } from "./ui/GlassModal";
-import appIcon from "../assets/icon.png";
+import { FlintLogo } from "./FlintLogo";
 
 interface OnboardingModalProps {
   onComplete: () => void;
@@ -163,12 +163,11 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
             {/* Logo with orbit */}
             <div className="relative mb-7 h-24 w-24 flex items-center justify-center">
               <OrbitRing />
-              <div className="absolute inset-0 m-auto h-12 w-12 rounded-full bg-indigo-500/20 blur-xl ob-glow-pulse" />
-              <img
-                src={appIcon}
-                alt="Rust-ine"
-                className="relative h-16 w-16 drop-shadow-[0_4px_20px_rgba(99,102,241,0.25)]"
+              <div
+                className="absolute inset-0 m-auto h-12 w-12 rounded-full blur-xl ob-glow-pulse"
+                style={{ background: "rgba(232,87,42,0.2)" }}
               />
+              <FlintLogo size={64} className="relative drop-shadow-[0_4px_20px_rgba(232,87,42,0.3)]" />
             </div>
 
             <h2 className="text-2xl font-light tracking-tight" style={{ color: "var(--text-primary)" }}>
@@ -324,16 +323,19 @@ export function OnboardingModal({ onComplete }: OnboardingModalProps) {
 
             {/* Logo callback — full circle */}
             <div className="ob-scale-in relative mb-6 h-24 w-24 flex items-center justify-center">
-              <div className="absolute inset-0 m-auto h-16 w-16 rounded-full bg-indigo-500/15 blur-2xl ob-glow-pulse" />
+              <div
+                className="absolute inset-0 m-auto h-16 w-16 rounded-full blur-2xl ob-glow-pulse"
+                style={{ background: "rgba(232,87,42,0.15)" }}
+              />
               <div
                 className="relative flex h-20 w-20 items-center justify-center rounded-full"
                 style={{
                   background: "var(--bg-overlay)",
                   border: "1px solid var(--bg-border)",
-                  boxShadow: "0 4px 24px rgba(99,102,241,0.15)",
+                  boxShadow: "0 4px 24px rgba(232,87,42,0.18)",
                 }}
               >
-                <img src={appIcon} alt="Rust-ine" className="h-11 w-11" />
+                <FlintLogo size={44} />
               </div>
             </div>
 

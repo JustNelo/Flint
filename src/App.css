@@ -1,25 +1,25 @@
 @import "tailwindcss";
 
-/* ─── Forge Sombre — Design Token System ─── */
+/* ─── Flint — Design Token System ─── */
 :root {
-  /* Backgrounds — depth layers */
-  --bg-base: #0a0a0f;
-  --bg-surface: #0f0f17;
-  --bg-elevated: #14141f;
-  --bg-overlay: #1a1a28;
-  --bg-border: #1f1f30;
+  /* Backgrounds — depth layers (violet sombre) */
+  --bg-base: #16141a;
+  --bg-surface: #1e1a24;
+  --bg-elevated: #221d29;
+  --bg-overlay: #2a2433;
+  --bg-border: #2d2832;
 
-  /* Indigo — signature accent */
-  --indigo-dim: #2d2b6b;
-  --indigo-muted: #4338ca;
-  --indigo-core: #6366f1;
-  --indigo-bright: #818cf8;
-  --indigo-glow: #a5b4fc;
+  /* Coral — signature accent */
+  --indigo-dim: #3d1a10;
+  --indigo-muted: #c44420;
+  --indigo-core: #e8572a;
+  --indigo-bright: #f06a3f;
+  --indigo-glow: #ff8a5c;
 
   /* Text */
-  --text-primary: #e8e8f0;
-  --text-secondary: #9898b0;
-  --text-tertiary: #55556a;
+  --text-primary: #f0edf5;
+  --text-secondary: #8a7a90;
+  --text-tertiary: #6a6070;
 
   /* States */
   --success: #22c55e;
@@ -27,8 +27,35 @@
   --danger: #ef4444;
 
   /* Glass surfaces */
-  --glass-bg: rgba(99, 102, 241, 0.04);
-  --glass-border: rgba(99, 102, 241, 0.12);
+  --glass-bg: rgba(232, 87, 42, 0.06);
+  --glass-border: rgba(232, 87, 42, 0.18);
+
+  /* ─── Flint semantic aliases (used by new components) ─── */
+  --flint-bg-base: #16141a;
+  --flint-bg-surface: #1e1a24;
+  --flint-bg-elevated: #2a1a14;
+  --flint-bg-hover: #1a1720;
+
+  --flint-sidebar-bg: #110f15;
+  --flint-sidebar-border: #2d2832;
+
+  --flint-accent: #e8572a;
+  --flint-accent-dim: #c44420;
+  --flint-accent-muted: #3d1a10;
+  --flint-accent-subtle: rgba(232, 87, 42, 0.08);
+
+  --flint-text-primary: #f0edf5;
+  --flint-text-secondary: #8a7a90;
+  --flint-text-muted: #6a6070;
+  --flint-text-faint: #4a4055;
+  --flint-text-ghost: #3a303f;
+
+  --flint-border: #2d2832;
+  --flint-border-accent: rgba(232, 87, 42, 0.33);
+
+  --flint-radius-sm: 4px;
+  --flint-radius-md: 6px;
+  --flint-radius-lg: 8px;
 
   /* Typography scale */
   --text-xs: 11px;
@@ -45,7 +72,7 @@
 
 /* ─── Button Design System ─── */
 
-/* Primary — main CTA (indigo flat, premium) */
+/* Primary — main CTA (coral flat, premium) */
 .btn-primary {
   display: inline-flex;
   align-items: center;
@@ -67,7 +94,7 @@
 }
 .btn-primary:hover {
   background: var(--indigo-muted);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 4px 12px rgba(232, 87, 42, 0.25);
   transform: translateY(-1px);
 }
 .btn-primary:active {
@@ -104,7 +131,7 @@
 }
 .btn-primary-sm:hover {
   background: var(--indigo-muted);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 4px 12px rgba(232, 87, 42, 0.25);
 }
 
 /* Toggle — segmented control buttons (lang, format) */
@@ -242,12 +269,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.15);
+  background: rgba(232, 87, 42, 0.18);
   border-radius: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.25);
+  background: rgba(232, 87, 42, 0.3);
 }
 
 /* ─── Tab Utility Classes ─── */
@@ -354,9 +381,144 @@ body {
   width: 14px;
   border-radius: 9999px;
   background: var(--indigo-core);
-  box-shadow: 0 0 8px rgba(129, 140, 248, 0.45);
+  box-shadow: 0 0 8px rgba(232, 87, 42, 0.45);
   border: none;
   cursor: pointer;
+}
+
+/* ─── Command Palette (⌘K) ─── */
+.cmd-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 80px;
+  z-index: 100;
+  animation: cmd-overlay-in 120ms ease both;
+}
+@keyframes cmd-overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.cmd-container {
+  background: var(--flint-bg-surface);
+  border: 1px solid var(--flint-border-accent);
+  border-radius: var(--flint-radius-lg);
+  width: 440px;
+  max-width: calc(100vw - 48px);
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  animation: cmd-pop-in 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes cmd-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.cmd-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--flint-border);
+}
+
+.cmd-key-icon {
+  display: inline-flex;
+  color: var(--flint-text-faint);
+}
+
+.cmd-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--flint-text-primary);
+}
+.cmd-input::placeholder {
+  color: var(--flint-text-faint);
+}
+
+.cmd-esc-hint {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--flint-text-ghost);
+  background: var(--bg-overlay);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.cmd-list {
+  padding: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.cmd-group-heading {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--flint-text-faint);
+  padding: 8px 10px 4px;
+}
+
+.cmd-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: var(--flint-radius-sm);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--flint-text-secondary);
+  border-left: 2px solid transparent;
+}
+.cmd-item[data-active="true"] {
+  background: linear-gradient(90deg, var(--flint-bg-elevated), transparent);
+  border-left: 2px solid var(--flint-accent);
+  color: var(--flint-text-primary);
+}
+.cmd-item-icon {
+  display: inline-flex;
+  color: var(--flint-text-muted);
+}
+.cmd-item[data-active="true"] .cmd-item-icon {
+  color: var(--flint-accent);
+}
+.cmd-item-label {
+  flex: 1;
+}
+.cmd-item-category {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--flint-text-faint);
+}
+
+.cmd-empty {
+  padding: 16px 10px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--flint-text-faint);
+  text-align: center;
 }
 
 /* ─── Splash Screen ─── */
@@ -413,9 +575,9 @@ body {
 
 .ob-aurora {
   background:
-    radial-gradient(ellipse 60% 50% at 20% 40%, rgba(99, 102, 241, 0.08) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 60% at 80% 60%, rgba(129, 140, 248, 0.06) 0%, transparent 70%),
-    radial-gradient(ellipse 70% 40% at 50% 80%, rgba(99, 102, 241, 0.05) 0%, transparent 70%);
+    radial-gradient(ellipse 60% 50% at 20% 40%, rgba(232, 87, 42, 0.1) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 60% at 80% 60%, rgba(255, 138, 92, 0.07) 0%, transparent 70%),
+    radial-gradient(ellipse 70% 40% at 50% 80%, rgba(232, 87, 42, 0.06) 0%, transparent 70%);
   background-size:
     200% 200%,
     200% 200%,
@@ -488,11 +650,11 @@ body {
   0%,
   100% {
     opacity: 0.6;
-    box-shadow: 0 0 6px 2px rgba(129, 140, 248, 0.3);
+    box-shadow: 0 0 6px 2px rgba(255, 138, 92, 0.3);
   }
   50% {
     opacity: 1;
-    box-shadow: 0 0 12px 4px rgba(129, 140, 248, 0.5);
+    box-shadow: 0 0 12px 4px rgba(255, 138, 92, 0.5);
   }
 }
 
@@ -500,10 +662,10 @@ body {
 @keyframes ob-dot-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(129, 140, 248, 0);
+    box-shadow: 0 0 0 0 rgba(255, 138, 92, 0);
   }
   50% {
-    box-shadow: 0 0 8px 3px rgba(129, 140, 248, 0.35);
+    box-shadow: 0 0 8px 3px rgba(255, 138, 92, 0.35);
   }
 }
 
@@ -511,7 +673,7 @@ body {
   animation: ob-dot-glow 2s ease-in-out infinite;
 }
 
-/* Floating particles — dust in light */
+/* Floating particles — sparks in the dark */
 @keyframes ob-particle-float {
   0% {
     transform: translateY(0) scale(1);
@@ -529,7 +691,7 @@ body {
 .ob-particle {
   position: absolute;
   border-radius: 50%;
-  background: rgba(99, 102, 241, var(--ob-p-opacity, 0.12));
+  background: rgba(232, 87, 42, var(--ob-p-opacity, 0.12));
   animation: ob-particle-float var(--ob-p-dur, 6s) ease-in-out infinite;
   animation-delay: var(--ob-p-delay, 0s);
   pointer-events: none;
@@ -551,7 +713,7 @@ body {
   animation: ob-scale-in 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* Indigo glow pulse — reusable */
+/* Coral glow pulse — reusable */
 @keyframes ob-glow-pulse {
   0%,
   100% {

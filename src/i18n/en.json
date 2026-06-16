@@ -1,5 +1,5 @@
 {
-  "app.name": "Rust-ine",
+  "app.name": "Flint",
   "app.tagline": "Image & PDF Swiss Army Knife",
 
   "section.image_tools": "Image Tools",
@@ -210,7 +210,7 @@
   "settings.theme_light": "Light",
   "settings.version": "Version",
 
-  "onboarding.welcome": "Welcome to Rust-ine",
+  "onboarding.welcome": "Welcome to Flint",
   "onboarding.welcome_sub": "Fast, local image & PDF processing.",
   "onboarding.language": "Choose your language",
   "onboarding.workspace_title": "Set your workspace",
@@ -234,6 +234,14 @@
   "sidebar.hint": "Drag & drop files or use Ctrl+O to browse.",
   "sidebar.hint_short": "Ctrl+O · Drag & drop",
   "sidebar.workspace": "Workspace",
+  "sidebar.cmdk_hint": "⌘K · Quick search",
+
+  "cmd.placeholder": "Search a tool...",
+  "cmd.empty": "No tool found",
+
+  "dropzone.rejected": "{n} file(s) ignored — unsupported format",
+  "dropzone.add_more": "Drop more files or click to add",
+  "action.ready_hint": "Ctrl+Enter ↵",
 
   "label.scale": "Scale",
   "label.px": "px",

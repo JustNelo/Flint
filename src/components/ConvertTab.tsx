@@ -89,8 +89,8 @@ export function ConvertTab() {
               padding: "2px 7px",
               fontSize: "var(--text-xs)",
               fontFamily: "var(--font-mono)",
-              background: "rgba(99, 102, 241, 0.08)",
-              border: "1px solid rgba(99, 102, 241, 0.2)",
+              background: "rgba(232, 87, 42, 0.08)",
+              border: "1px solid rgba(232, 87, 42, 0.2)",
               color: "var(--indigo-glow)",
             }}
           >
