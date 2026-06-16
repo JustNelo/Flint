@@ -45,9 +45,11 @@ export function ConvertTab() {
   const [panelMode, setPanelMode] = useState<MaterialMode>("material");
 
   // Show results after a run, fall back to material when the list is cleared.
+  // Guarded by !loading so an in-flight run (which clears results first) does not
+  // flash the material view before the new results arrive.
   useEffect(() => {
-    setPanelMode(results.length > 0 ? "results" : "material");
-  }, [results]);
+    if (!loading) setPanelMode(results.length > 0 ? "results" : "material");
+  }, [results, loading]);
 
   const handleConvert = useCallback(async () => {
     await process({
