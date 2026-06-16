@@ -239,6 +239,9 @@
   "cmd.placeholder": "Rechercher un outil...",
   "cmd.empty": "Aucun outil trouvé",
 
+  "rail.expand": "Étendre le menu",
+  "rail.collapse": "Réduire le menu",
+
   "dropzone.rejected": "{n} fichier(s) ignoré(s) — format non pris en charge",
   "dropzone.add_more": "Déposez d'autres fichiers ou cliquez pour ajouter",
   "action.ready_hint": "Ctrl+Entrée ↵",

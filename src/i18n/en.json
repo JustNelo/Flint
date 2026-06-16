@@ -239,6 +239,9 @@
   "cmd.placeholder": "Search a tool...",
   "cmd.empty": "No tool found",
 
+  "rail.expand": "Expand sidebar",
+  "rail.collapse": "Collapse sidebar",
+
   "dropzone.rejected": "{n} file(s) ignored — unsupported format",
   "dropzone.add_more": "Drop more files or click to add",
   "action.ready_hint": "Ctrl+Enter ↵",
