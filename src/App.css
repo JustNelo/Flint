@@ -78,6 +78,11 @@
 
 /* ─── Button Design System ─── */
 
+/* Retained ember glow — apply only to active/CTA/forge surfaces */
+.glow-ember {
+  box-shadow: 0 0 24px var(--ember-glow);
+}
+
 /* Primary — main CTA (coral flat, premium) */
 .btn-primary {
   display: inline-flex;
@@ -100,7 +105,9 @@
 }
 .btn-primary:hover {
   background: var(--indigo-muted);
-  box-shadow: 0 4px 12px rgba(232, 87, 42, 0.25);
+  box-shadow:
+    0 4px 12px rgba(232, 87, 42, 0.25),
+    0 0 22px var(--ember-glow);
   transform: translateY(-1px);
 }
 .btn-primary:active {
@@ -169,6 +176,7 @@
   border-color: var(--indigo-core) !important;
   color: var(--indigo-glow) !important;
   font-weight: 600;
+  box-shadow: 0 0 12px rgba(232, 87, 42, 0.18);
 }
 
 /* Ghost — text-like buttons (back, skip, links) */
