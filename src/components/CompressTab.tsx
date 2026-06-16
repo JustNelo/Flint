@@ -69,7 +69,7 @@ export function CompressTab() {
       });
 
       setResults(result.results);
-      if (result.results.some((r) => r.success)) setPanelMode("results");
+      if (result.results.length > 0) setPanelMode("results");
 
       const successCount = result.results.filter((r) => r.success).length;
       const failCount = result.results.filter((r) => !r.success).length;
@@ -115,14 +115,24 @@ export function CompressTab() {
       <ControlsPanel
         disabled={isEmpty}
         action={
-          <ActionButton
-            onClick={handleCompress}
-            disabled={isEmpty}
-            loading={loading}
-            loadingText={t("status.compressing")}
-            text={isEmpty ? t("action.compress") : t("action.compress_n", { n: files.length })}
-            icon={<Zap className="h-4 w-4" strokeWidth={1.5} />}
-          />
+          <>
+            <ActionButton
+              onClick={handleCompress}
+              disabled={isEmpty}
+              loading={loading}
+              loadingText={t("status.compressing")}
+              text={isEmpty ? t("action.compress") : t("action.compress_n", { n: files.length })}
+              icon={<Zap className="h-4 w-4" strokeWidth={1.5} />}
+            />
+            {!isEmpty && !loading && (
+              <p
+                className="text-center"
+                style={{ marginTop: 6, fontSize: 10, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}
+              >
+                {t("action.ready_hint")}
+              </p>
+            )}
+          </>
         }
       >
         <div className="space-y-2">
