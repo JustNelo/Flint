@@ -132,6 +132,9 @@ const TAB_DESC_KEYS: Record<TabId, string> = {
   "svg-rasterize": "tab.svg_rasterize.desc",
 };
 
+// Tools migrated to the full-width Établi 2-pane layout (others use the centered column).
+const ETABLI_TOOLS = new Set<TabId>(["compress", "convert"]);
+
 const TAB_LABEL_KEYS: Record<TabId, string> = {
   compress: "tab.compress",
   convert: "tab.convert",
@@ -234,7 +237,7 @@ function App() {
           />
         }
       >
-        {activeTab === "compress" ? (
+        {ETABLI_TOOLS.has(activeTab) ? (
           <div>
             <div style={{ marginBottom: 24 }}>
               <h2
@@ -252,7 +255,8 @@ function App() {
                 {t(TAB_DESC_KEYS[activeTab])}
               </p>
             </div>
-            <CompressTab />
+            {activeTab === "compress" && <CompressTab />}
+            {activeTab === "convert" && <ConvertTab />}
           </div>
         ) : (
           <div className="mx-auto" style={{ maxWidth: 860 }}>
@@ -273,7 +277,6 @@ function App() {
               </p>
             </div>
 
-            {activeTab === "convert" && <ConvertTab />}
             {activeTab === "resize" && <ResizeTab />}
             {activeTab === "crop" && <CropTab />}
             {activeTab === "optimize" && <OptimizeTab />}
