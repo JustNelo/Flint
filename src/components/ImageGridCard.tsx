@@ -11,10 +11,15 @@ interface ImageGridCardProps {
   index: number;
   onPreview: (filePath: string) => void;
   onInfo?: (filePath: string) => void;
+  /**
+   * Downscaled thumbnail data URI. `null` means the file can't be rasterized
+   * (fall back to the original), `undefined` means it is still being generated.
+   */
+  thumbnailSrc?: string | null;
 }
 
 export const ImageGridCard = memo(
-  function ImageGridCard({ id, filePath, onRemove, index, onPreview, onInfo }: ImageGridCardProps) {
+  function ImageGridCard({ id, filePath, onRemove, index, onPreview, onInfo, thumbnailSrc }: ImageGridCardProps) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
     const style = {
@@ -38,6 +43,12 @@ export const ImageGridCard = memo(
       contentVisibility: isDragging ? "visible" : "auto",
       containIntrinsicSize: "auto 140px",
     } as React.CSSProperties;
+
+    // Prefer the bounded-size thumbnail; fall back to the original only for
+    // sources the backend couldn't rasterize (null, e.g. SVG). While pending
+    // (undefined) we render a neutral placeholder rather than decoding the
+    // full-resolution original.
+    const imgSrc = thumbnailSrc != null ? thumbnailSrc : thumbnailSrc === null ? safeAssetUrl(filePath) : undefined;
 
     return (
       <div
@@ -79,18 +90,21 @@ export const ImageGridCard = memo(
           </button>
         )}
 
-        {/* Thumbnail */}
-        <img
-          src={safeAssetUrl(filePath)}
-          alt={fileName}
-          loading="lazy"
-          decoding="async"
-          draggable={false}
-          className="h-full w-full object-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
-        />
+        {/* Thumbnail — bounded-size decode; placeholder while it is generated */}
+        {imgSrc ? (
+          <img
+            src={imgSrc}
+            alt={fileName}
+            decoding="async"
+            draggable={false}
+            className="h-full w-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+        ) : (
+          <div className="h-full w-full" style={{ background: "var(--bg-elevated)" }} aria-hidden />
+        )}
 
         {/* Info bar */}
         <div
@@ -113,6 +127,7 @@ export const ImageGridCard = memo(
       prev.id === next.id &&
       prev.filePath === next.filePath &&
       prev.index === next.index &&
+      prev.thumbnailSrc === next.thumbnailSrc &&
       prev.onRemove === next.onRemove &&
       prev.onPreview === next.onPreview &&
       prev.onInfo === next.onInfo

@@ -247,6 +247,14 @@ async fn convert_images(
 }
 
 #[tauri::command]
+async fn generate_image_thumbnails(
+    input_paths: Vec<String>,
+) -> Result<Vec<image_ops::ImageThumbnail>, String> {
+    validate_paths(&input_paths)?;
+    run_blocking(move || image_ops::generate_thumbnails(&input_paths)).await
+}
+
+#[tauri::command]
 async fn extract_pdf_images(
     app_handle: tauri::AppHandle,
     pdfium_state: tauri::State<'_, PdfiumState>,
@@ -799,6 +807,7 @@ pub fn run() {
             compress_webp,
             compress_jpeg,
             convert_images,
+            generate_image_thumbnails,
             extract_pdf_images,
             resize_images,
             strip_metadata,

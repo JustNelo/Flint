@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, memo } from "react";
+import { useCallback, useState, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { X } from "lucide-react";
 import {
@@ -14,6 +14,7 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, rectSortingStrategy } from "@dnd-kit/sortable";
 import { useT } from "../i18n/i18n";
 import { safeAssetUrl } from "../lib/utils";
+import { useThumbnails } from "../hooks/useThumbnails";
 import { ImageGridCard } from "./ImageGridCard";
 import { MetadataPanel } from "./MetadataPanel";
 import type { ImageMetadata } from "../types";
@@ -43,21 +44,24 @@ export const ImageGrid = memo(function ImageGrid({ files, onReorder, onRemove, o
     }),
   );
 
-  // Stable IDs for DnD — use path + index to ensure uniqueness
-  const itemIds = useMemo(() => files.map((f, i) => `${i}::${f}`), [files]);
+  // Resolve bounded-size thumbnails so cards never decode the full-res original.
+  const thumbs = useThumbnails(files);
 
+  // File paths are unique within the list (addFiles dedupes by path), so they
+  // serve as stable DnD ids / React keys — no array index, so removing or
+  // reordering never remounts (and re-decodes) the surviving cards.
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
       if (over && active.id !== over.id) {
-        const oldIndex = itemIds.indexOf(active.id as string);
-        const newIndex = itemIds.indexOf(over.id as string);
+        const oldIndex = files.indexOf(active.id as string);
+        const newIndex = files.indexOf(over.id as string);
         if (oldIndex !== -1 && newIndex !== -1) {
           onReorder(oldIndex, newIndex);
         }
       }
     },
-    [itemIds, onReorder],
+    [files, onReorder],
   );
 
   const [infoMetadata, setInfoMetadata] = useState<ImageMetadata | null>(null);
@@ -127,7 +131,7 @@ export const ImageGrid = memo(function ImageGrid({ files, onReorder, onRemove, o
           onDragEnd={handleDragEnd}
           measuring={MEASURING_CONFIG}
         >
-          <SortableContext items={itemIds} strategy={rectSortingStrategy}>
+          <SortableContext items={files} strategy={rectSortingStrategy}>
             <div
               className="max-h-64 overflow-y-auto pr-1"
               style={{
@@ -138,13 +142,14 @@ export const ImageGrid = memo(function ImageGrid({ files, onReorder, onRemove, o
             >
               {files.map((file, index) => (
                 <ImageGridCard
-                  key={itemIds[index]}
-                  id={itemIds[index]}
+                  key={file}
+                  id={file}
                   filePath={file}
                   index={index}
                   onRemove={onRemove}
                   onPreview={openPreview}
                   onInfo={openInfo}
+                  thumbnailSrc={thumbs.get(file)}
                 />
               ))}
             </div>

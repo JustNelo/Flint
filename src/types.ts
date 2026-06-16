@@ -17,6 +17,12 @@ export interface BatchProgress {
   results: ProcessingResult[];
 }
 
+export interface ImageThumbnail {
+  path: string;
+  /** Base64 JPEG payload, or null when the source could not be rasterized (e.g. SVG). */
+  thumbnail_b64: string | null;
+}
+
 export interface PdfExtractionResult {
   pdf_path: string;
   output_dir: string;

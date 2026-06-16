@@ -2,6 +2,7 @@ import { useMemo, useState, useCallback, memo } from "react";
 import { CheckCircle, AlertCircle, XCircle, ZoomIn, FolderOpen } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { formatSize, isImage, safeAssetUrl } from "../lib/utils";
+import { useThumbnails } from "../hooks/useThumbnails";
 import { BeforeAfterSlider } from "./ui/BeforeAfterSlider";
 import { useT } from "../i18n/i18n";
 import type { ProcessingResult } from "../types";
@@ -28,6 +29,11 @@ export const ResultsBanner = memo(function ResultsBanner({ results, total, outpu
     const saved = totalInput > 0 ? (1 - totalOutput / totalInput) * 100 : 0;
     return { totalInput, totalOutput, saved };
   }, [results]);
+
+  // Bounded-size thumbnails for the output grid. `alwaysFresh` regenerates on
+  // every new result set since a re-run can overwrite the same output path.
+  const outputPaths = useMemo(() => results.filter((r) => r.success).map((r) => r.output_path), [results]);
+  const thumbs = useThumbnails(outputPaths, true);
 
   if (results.length === 0) return null;
 
@@ -91,6 +97,11 @@ export const ResultsBanner = memo(function ResultsBanner({ results, total, outpu
             {successResults.map((r, i) => {
               const outName = r.output_path.split(/[\\/]/).pop() || "";
               const canPreview = isImage(r.output_path);
+              const thumb = thumbs.get(r.output_path);
+              // Prefer the thumbnail; fall back to the original only when the
+              // backend couldn't rasterize it (null); render a placeholder while
+              // it is still being generated (undefined).
+              const previewSrc = thumb != null ? thumb : thumb === null ? safeAssetUrl(r.output_path, true) : undefined;
               return (
                 <div
                   key={i}
@@ -104,17 +115,18 @@ export const ResultsBanner = memo(function ResultsBanner({ results, total, outpu
                   }}
                   onClick={() => canPreview && setPreviewResult(r)}
                 >
-                  {canPreview ? (
+                  {canPreview && previewSrc ? (
                     <img
-                      src={safeAssetUrl(r.output_path, true)}
+                      src={previewSrc}
                       alt={outName}
-                      loading="lazy"
                       decoding="async"
                       className="h-full w-full object-cover"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";
                       }}
                     />
+                  ) : canPreview ? (
+                    <div className="h-full w-full" style={{ background: "var(--bg-elevated)" }} aria-hidden />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center">
                       <CheckCircle className="h-5 w-5 text-green-400/50" strokeWidth={1.5} />

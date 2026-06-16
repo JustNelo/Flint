@@ -1,9 +1,11 @@
 use ab_glyph::{FontArc, PxScale};
+use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, ImageFormat, ImageReader, Rgba};
 use imageproc::drawing::draw_text_mut;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock};
@@ -67,6 +69,52 @@ fn load_image(path: &str) -> Result<DynamicImage, String> {
         .map_err(|e| format!("Cannot open file '{}': {}", path, e))?
         .decode()
         .map_err(|e| format!("Cannot decode image '{}': {}", path, e))
+}
+
+/// Max edge (px) for grid thumbnails. ~2x the ~100px display cell so they stay
+/// crisp on hi-dpi screens while the decoded bitmap stays tiny
+/// (256*256*4 ≈ 256 KB) regardless of the source image's native resolution.
+const THUMBNAIL_MAX_EDGE: u32 = 256;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ImageThumbnail {
+    pub path: String,
+    /// Base64-encoded JPEG, or `None` when the file cannot be decoded as a
+    /// raster image (e.g. SVG / unsupported) — the frontend then falls back to
+    /// the original via the asset protocol.
+    pub thumbnail_b64: Option<String>,
+}
+
+fn encode_thumbnail(path: &str) -> Result<String, String> {
+    use base64::Engine;
+    let img = load_image(path)?;
+    // `thumbnail` preserves aspect ratio within the box using a fast filter.
+    // Drop alpha (JPEG has none) by re-wrapping as RGB8 before encoding.
+    let thumb = DynamicImage::ImageRgb8(
+        img.thumbnail(THUMBNAIL_MAX_EDGE, THUMBNAIL_MAX_EDGE)
+            .to_rgb8(),
+    );
+
+    let mut jpeg_buf: Vec<u8> = Vec::new();
+    let encoder = JpegEncoder::new_with_quality(Cursor::new(&mut jpeg_buf), 70);
+    thumb
+        .write_with_encoder(encoder)
+        .map_err(|e| format!("JPEG encode failed for '{}': {}", path, e))?;
+
+    Ok(base64::engine::general_purpose::STANDARD.encode(&jpeg_buf))
+}
+
+/// Generate small base64 JPEG thumbnails for a batch of images, in parallel.
+/// Each source path maps to its thumbnail (or `None` on failure) so the grid
+/// can decode a bounded-size bitmap instead of the full-resolution original.
+pub fn generate_thumbnails(input_paths: &[String]) -> Vec<ImageThumbnail> {
+    input_paths
+        .par_iter()
+        .map(|path| ImageThumbnail {
+            path: path.clone(),
+            thumbnail_b64: encode_thumbnail(path).ok(),
+        })
+        .collect()
 }
 
 pub fn compress_to_webp(
@@ -860,5 +908,37 @@ mod tests {
         assert!(!r.success);
         assert_eq!(r.error.as_deref(), Some("decode error"));
         assert_eq!(r.output_path, String::new());
+    }
+
+    #[test]
+    fn generate_thumbnails_downscales_and_marks_failures() {
+        // Write a large temp PNG so the source bitmap dwarfs the thumbnail.
+        let path = std::env::temp_dir().join("rustine_thumb_test.png");
+        let path_str = path.to_string_lossy().to_string();
+        DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            1024,
+            1024,
+            Rgba([200, 30, 30, 255]),
+        ))
+        .save(&path)
+        .unwrap();
+
+        let missing = "/nonexistent/definitely_not_here.png".to_string();
+        let res = generate_thumbnails(&[path_str.clone(), missing.clone()]);
+        assert_eq!(res.len(), 2);
+
+        let ok = res.iter().find(|t| t.path == path_str).unwrap();
+        let b64 = ok.thumbnail_b64.as_ref().expect("thumbnail should encode");
+        // A 256px JPEG is far smaller than the 1024x1024 RGBA source.
+        assert!(
+            b64.len() < 50_000,
+            "thumbnail unexpectedly large: {}",
+            b64.len()
+        );
+
+        let bad = res.iter().find(|t| t.path == missing).unwrap();
+        assert!(bad.thumbnail_b64.is_none());
+
+        let _ = std::fs::remove_file(&path);
     }
 }

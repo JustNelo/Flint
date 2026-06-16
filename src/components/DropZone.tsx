@@ -98,6 +98,10 @@ export function DropZone({
       style={{
         height: compact ? 56 : 180,
         borderRadius: 12,
+        // Scope the mix-blend noise overlay to this box. Without it the blend
+        // resolves against the whole-page backdrop, forcing a full-window
+        // repaint on every scroll frame (4fps repaint storm).
+        isolation: "isolate",
         border: isDragging ? "1px solid var(--indigo-glow)" : "1px dashed var(--glass-border)",
         background: isDragging ? "var(--glass-bg)" : "var(--bg-elevated)",
         boxShadow: isDragging ? "0 0 0 4px rgba(232,87,42,0.1)" : "none",
@@ -118,14 +122,6 @@ export function DropZone({
         }
       }}
     >
-      <div
-        className="absolute inset-0 opacity-[0.03] pointer-events-none mix-blend-overlay"
-        style={{
-          borderRadius: 12,
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E\")",
-        }}
-      />
       <Upload
         style={{
           width: compact ? 18 : 28,
