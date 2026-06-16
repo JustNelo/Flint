@@ -2,24 +2,30 @@
 
 /* ─── Flint — Design Token System ─── */
 :root {
-  /* Backgrounds — depth layers (violet sombre) */
-  --bg-base: #16141a;
-  --bg-surface: #1e1a24;
-  --bg-elevated: #221d29;
-  --bg-overlay: #2a2433;
-  --bg-border: #2d2832;
+  /* Backgrounds — depth layers (charbon chaud / Forge) */
+  --bg-base: #161210;
+  --bg-surface: #1e1813;
+  --bg-elevated: #251d17;
+  --bg-overlay: #2e241c;
+  --bg-border: #34281f;
 
-  /* Coral — signature accent */
+  /* Coral — signature accent (kept) */
   --indigo-dim: #3d1a10;
   --indigo-muted: #c44420;
   --indigo-core: #e8572a;
   --indigo-bright: #f06a3f;
   --indigo-glow: #ff8a5c;
 
-  /* Text */
-  --text-primary: #f0edf5;
-  --text-secondary: #8a7a90;
-  --text-tertiary: #6a6070;
+  /* Spark — amber second tone (new) */
+  --spark: #ffb04a;
+
+  /* Retained ember glow — only on active/CTA/forge surfaces */
+  --ember-glow: rgba(232, 87, 42, 0.4);
+
+  /* Text (neutres chauds) */
+  --text-primary: #f3eee8;
+  --text-secondary: #a89a8c;
+  --text-tertiary: #7a6e62;
 
   /* States */
   --success: #22c55e;
@@ -31,26 +37,26 @@
   --glass-border: rgba(232, 87, 42, 0.18);
 
   /* ─── Flint semantic aliases (used by new components) ─── */
-  --flint-bg-base: #16141a;
-  --flint-bg-surface: #1e1a24;
+  --flint-bg-base: #161210;
+  --flint-bg-surface: #1e1813;
   --flint-bg-elevated: #2a1a14;
-  --flint-bg-hover: #1a1720;
+  --flint-bg-hover: #1c1712;
 
-  --flint-sidebar-bg: #110f15;
-  --flint-sidebar-border: #2d2832;
+  --flint-sidebar-bg: #100c09;
+  --flint-sidebar-border: #34281f;
 
   --flint-accent: #e8572a;
   --flint-accent-dim: #c44420;
   --flint-accent-muted: #3d1a10;
   --flint-accent-subtle: rgba(232, 87, 42, 0.08);
 
-  --flint-text-primary: #f0edf5;
-  --flint-text-secondary: #8a7a90;
-  --flint-text-muted: #6a6070;
-  --flint-text-faint: #4a4055;
-  --flint-text-ghost: #3a303f;
+  --flint-text-primary: #f3eee8;
+  --flint-text-secondary: #a89a8c;
+  --flint-text-muted: #7a6e62;
+  --flint-text-faint: #564b40;
+  --flint-text-ghost: #3a302a;
 
-  --flint-border: #2d2832;
+  --flint-border: #34281f;
   --flint-border-accent: rgba(232, 87, 42, 0.33);
 
   --flint-radius-sm: 4px;
