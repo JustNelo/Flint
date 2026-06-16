@@ -18,10 +18,11 @@ import {
   QrCode,
   PenLine,
   FileImage,
-  Search,
 } from "lucide-react";
 import { TitleBar } from "./components/TitleBar";
 import { CommandPalette, type CommandTool } from "./components/CommandPalette";
+import { WorkbenchShell } from "./components/WorkbenchShell";
+import { ToolRail } from "./components/ToolRail";
 import { CompressTab } from "./components/CompressTab";
 import { ConvertTab } from "./components/ConvertTab";
 import { ResizeTab } from "./components/ResizeTab";
@@ -222,188 +223,53 @@ function App() {
       <TitleBar onShowHistory={() => setShowHistory(true)} onShowSettings={() => setShowSettings(true)} />
       <UpdateBanner status={updateStatus} version={updateVersion} onInstall={installUpdate} onDismiss={dismissUpdate} />
 
-      <div className="relative z-10 flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <aside
-          className="flex shrink-0 flex-col"
-          style={{
-            width: 200,
-            background: "var(--flint-sidebar-bg)",
-            borderRight: "1px solid var(--flint-sidebar-border)",
-          }}
-        >
-          {/* Sidebar header — quick-search trigger (opens ⌘K palette) */}
-          <div style={{ padding: "10px 10px 8px" }}>
-            <button
-              onClick={() => setCmdOpen(true)}
-              className="flex items-center w-full cursor-pointer"
+      <WorkbenchShell
+        rail={
+          <ToolRail
+            sections={SIDEBAR_SECTIONS}
+            activeTab={activeTab}
+            onSelect={setActiveTab}
+            onOpenCommand={() => setCmdOpen(true)}
+            appVersion={appVersion}
+          />
+        }
+      >
+        <div className="mx-auto" style={{ maxWidth: 860 }}>
+          <div style={{ marginBottom: 24 }}>
+            <h2
               style={{
-                gap: 8,
-                height: 30,
-                padding: "0 10px",
-                borderRadius: 6,
-                background: "var(--bg-overlay)",
-                border: "1px solid var(--flint-sidebar-border)",
-                color: "var(--text-tertiary)",
-                transition: "all 150ms ease",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "var(--flint-border-accent)";
-                e.currentTarget.style.color = "var(--text-secondary)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "var(--flint-sidebar-border)";
-                e.currentTarget.style.color = "var(--text-tertiary)";
+                fontSize: "var(--text-xl)",
+                fontWeight: 600,
+                color: "var(--text-primary)",
+                letterSpacing: "-0.01em",
+                lineHeight: 1.3,
               }}
             >
-              <Search style={{ width: 13, height: 13, flexShrink: 0 }} strokeWidth={1.5} />
-              <span style={{ flex: 1, textAlign: "left", fontSize: 11, fontFamily: "var(--font-sans)" }}>
-                {t("cmd.placeholder")}
-              </span>
-              <kbd
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 9,
-                  padding: "2px 5px",
-                  borderRadius: 4,
-                  background: "var(--bg-base)",
-                  color: "var(--text-tertiary)",
-                }}
-              >
-                ⌘K
-              </kbd>
-            </button>
+              {t(TAB_LABEL_KEYS[activeTab])}
+            </h2>
+            <p style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
+              {t(TAB_DESC_KEYS[activeTab])}
+            </p>
           </div>
 
-          <nav className="flex flex-col gap-0.5 px-2 mt-1 flex-1 overflow-y-auto">
-            {SIDEBAR_SECTIONS.map((section) => (
-              <div key={section.titleKey} className="mb-1">
-                <div className="px-3 pt-4 pb-1.5">
-                  <span
-                    className="font-semibold uppercase select-none"
-                    style={{ fontSize: 9, letterSpacing: "0.08em", color: "var(--text-tertiary)" }}
-                  >
-                    {t(section.titleKey)}
-                  </span>
-                </div>
-                {section.tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className="relative flex items-center w-full cursor-pointer"
-                      style={{
-                        height: 32,
-                        padding: "0 12px",
-                        borderRadius: 6,
-                        gap: 8,
-                        fontSize: "var(--text-sm)",
-                        fontWeight: 500,
-                        fontFamily: "var(--font-sans)",
-                        transition: "all 150ms ease",
-                        background: isActive
-                          ? "linear-gradient(90deg, var(--flint-bg-elevated), transparent)"
-                          : "transparent",
-                        color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
-                        border: "none",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.background = "var(--bg-overlay)";
-                          e.currentTarget.style.color = "var(--text-primary)";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.background = "transparent";
-                          e.currentTarget.style.color = "var(--text-secondary)";
-                        }
-                      }}
-                    >
-                      {/* Active indicator bar */}
-                      <span
-                        className="absolute left-0 top-1/2 -translate-y-1/2"
-                        style={{
-                          width: 2,
-                          height: 16,
-                          borderRadius: 1,
-                          background: isActive ? "var(--indigo-core)" : "transparent",
-                          transition: "transform 150ms ease, background 150ms ease",
-                          transform: isActive ? "scaleX(1)" : "scaleX(0)",
-                          transformOrigin: "left",
-                        }}
-                      />
-                      <Icon
-                        style={{
-                          width: 14,
-                          height: 14,
-                          color: isActive ? "var(--indigo-core)" : "var(--text-tertiary)",
-                          transition: "color 150ms ease",
-                          flexShrink: 0,
-                        }}
-                        strokeWidth={1.5}
-                      />
-                      {t(tab.labelKey)}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-          </nav>
-
-          {appVersion && (
-            <div
-              className="px-3 py-3 flex items-center justify-center"
-              style={{ borderTop: "1px solid var(--bg-border)" }}
-            >
-              <span style={{ fontSize: 10, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>
-                v{appVersion}
-              </span>
-            </div>
-          )}
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto" style={{ padding: "32px 40px" }}>
-          <div className="mx-auto" style={{ maxWidth: 680 }}>
-            <div style={{ marginBottom: 24 }}>
-              <h2
-                style={{
-                  fontSize: "var(--text-xl)",
-                  fontWeight: 600,
-                  color: "var(--text-primary)",
-                  letterSpacing: "-0.01em",
-                  lineHeight: 1.3,
-                }}
-              >
-                {t(TAB_LABEL_KEYS[activeTab])}
-              </h2>
-              <p style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
-                {t(TAB_DESC_KEYS[activeTab])}
-              </p>
-            </div>
-
-            {activeTab === "compress" && <CompressTab />}
-            {activeTab === "convert" && <ConvertTab />}
-            {activeTab === "resize" && <ResizeTab />}
-            {activeTab === "crop" && <CropTab />}
-            {activeTab === "optimize" && <OptimizeTab />}
-            {activeTab === "watermark" && <WatermarkTab />}
-            {activeTab === "strip" && <ExifStripTab />}
-            {activeTab === "pdf-toolkit" && <PdfWorkbenchTab />}
-            {activeTab === "palette" && <PaletteTab />}
-            {activeTab === "favicon" && <FaviconTab />}
-            {activeTab === "animation" && <AnimationTab />}
-            {activeTab === "spritesheet" && <SpriteSheetTab />}
-            {activeTab === "base64" && <Base64Tab />}
-            {activeTab === "qrcode" && <QrCodeTab />}
-            {activeTab === "bulk-rename" && <BulkRenameTab />}
-            {activeTab === "svg-rasterize" && <SvgRasterizeTab />}
-          </div>
-        </main>
-      </div>
+          {activeTab === "compress" && <CompressTab />}
+          {activeTab === "convert" && <ConvertTab />}
+          {activeTab === "resize" && <ResizeTab />}
+          {activeTab === "crop" && <CropTab />}
+          {activeTab === "optimize" && <OptimizeTab />}
+          {activeTab === "watermark" && <WatermarkTab />}
+          {activeTab === "strip" && <ExifStripTab />}
+          {activeTab === "pdf-toolkit" && <PdfWorkbenchTab />}
+          {activeTab === "palette" && <PaletteTab />}
+          {activeTab === "favicon" && <FaviconTab />}
+          {activeTab === "animation" && <AnimationTab />}
+          {activeTab === "spritesheet" && <SpriteSheetTab />}
+          {activeTab === "base64" && <Base64Tab />}
+          {activeTab === "qrcode" && <QrCodeTab />}
+          {activeTab === "bulk-rename" && <BulkRenameTab />}
+          {activeTab === "svg-rasterize" && <SvgRasterizeTab />}
+        </div>
+      </WorkbenchShell>
 
       <SplashScreen visible={isLoading} />
       <GlobalProgressBar />
