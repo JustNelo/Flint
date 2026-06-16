@@ -4,6 +4,8 @@ import { Film, CheckCircle, XCircle, ArrowUp, ArrowDown, Trash2 } from "lucide-r
 import { toast } from "sonner";
 import { DropZone } from "./DropZone";
 import { ActionButton } from "./ui/ActionButton";
+import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
+import { ControlsPanel } from "./ControlsPanel";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useHistory } from "../hooks/useHistory";
 import { useT } from "../i18n/i18n";
@@ -25,10 +27,12 @@ export function AnimationTab() {
   const [loopCount, setLoopCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnimationResult | null>(null);
+  const [panelMode, setPanelMode] = useState<MaterialMode>("material");
 
   const handleFilesSelected = useCallback((paths: string[]) => {
     setFrames((prev) => [...prev, ...paths]);
     setResult(null);
+    setPanelMode("material");
   }, []);
 
   const moveFrame = useCallback((index: number, direction: -1 | 1) => {
@@ -48,6 +52,7 @@ export function AnimationTab() {
   const clearFrames = useCallback(() => {
     setFrames([]);
     setResult(null);
+    setPanelMode("material");
   }, []);
 
   const handleCreate = useCallback(async () => {
@@ -73,6 +78,7 @@ export function AnimationTab() {
       });
 
       setResult(res);
+      if (res.frame_count > 0) setPanelMode("results");
 
       const successCount = res.frame_count > 0 ? 1 : 0;
       addEntry({
@@ -102,163 +108,182 @@ export function AnimationTab() {
     return parts[parts.length - 1] || path;
   };
 
-  return (
-    <div className="space-y-5">
-      <DropZone
-        accept="png,jpg,jpeg,bmp,tiff,tif,webp"
-        label={t("dropzone.images_animation")}
-        sublabel={t("dropzone.sublabel_animation")}
-        onFilesSelected={handleFilesSelected}
-      />
+  const isEmpty = frames.length === 0;
+  const hasResults = result !== null && result.frame_count > 0;
 
-      {frames.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <p style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-secondary)" }}>
-              {t("result.files_selected", { n: frames.length })}
-            </p>
-            <button
-              onClick={clearFrames}
-              className="text-[10px] text-neutral-500 hover:text-red-400 transition-colors duration-200 cursor-pointer"
-            >
-              {t("label.clear_all")}
-            </button>
-          </div>
-          <div className="max-h-48 overflow-y-auto space-y-1 forge-card p-2">
-            {frames.map((path, index) => (
-              <div
-                key={`${path}-${index}`}
-                className="flex items-center gap-2 px-2 py-1.5 group"
-                style={{
-                  borderRadius: 8,
-                  fontSize: "var(--text-sm)",
-                  color: "var(--text-secondary)",
-                  background: "var(--bg-overlay)",
-                  transition: "background 150ms ease",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontFamily: "var(--font-mono)",
-                    color: "var(--text-tertiary)",
-                    width: 20,
-                    textAlign: "right",
-                    flexShrink: 0,
-                  }}
-                >
-                  {index + 1}
-                </span>
-                <img
-                  src={safeAssetUrl(path)}
-                  alt=""
-                  className="h-7 w-7 rounded object-cover shrink-0"
-                  style={{ border: "1px solid var(--bg-border)" }}
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = "none";
-                  }}
-                />
-                <span className="flex-1 truncate">{getFilename(path)}</span>
-                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+  return (
+    <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+      <MaterialPanel
+        mode={panelMode}
+        onModeChange={setPanelMode}
+        hasResults={hasResults}
+        material={
+          <div className="space-y-3">
+            <DropZone
+              accept="png,jpg,jpeg,bmp,tiff,tif,webp"
+              label={isEmpty ? t("dropzone.images_animation") : t("dropzone.add_more")}
+              sublabel={t("dropzone.sublabel_animation")}
+              compact={!isEmpty}
+              onFilesSelected={handleFilesSelected}
+            />
+
+            {frames.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-secondary)" }}>
+                    {t("result.files_selected", { n: frames.length })}
+                  </p>
                   <button
-                    onClick={() => moveFrame(index, -1)}
-                    disabled={index === 0}
-                    className="btn-icon p-0.5 disabled:opacity-30"
+                    onClick={clearFrames}
+                    className="text-[10px] text-neutral-500 hover:text-red-400 transition-colors duration-200 cursor-pointer"
                   >
-                    <ArrowUp className="h-3 w-3" strokeWidth={1.5} />
+                    {t("label.clear_all")}
                   </button>
-                  <button
-                    onClick={() => moveFrame(index, 1)}
-                    disabled={index === frames.length - 1}
-                    className="btn-icon p-0.5 disabled:opacity-30"
-                  >
-                    <ArrowDown className="h-3 w-3" strokeWidth={1.5} />
-                  </button>
-                  <button onClick={() => removeFrame(index)} className="btn-icon p-0.5">
-                    <Trash2 className="h-3 w-3" strokeWidth={1.5} />
-                  </button>
+                </div>
+                <div className="max-h-96 overflow-y-auto space-y-1 forge-card p-2">
+                  {frames.map((path, index) => (
+                    <div
+                      key={`${path}-${index}`}
+                      className="flex items-center gap-2 px-2 py-1.5 group"
+                      style={{
+                        borderRadius: 8,
+                        fontSize: "var(--text-sm)",
+                        color: "var(--text-secondary)",
+                        background: "var(--bg-overlay)",
+                        transition: "background 150ms ease",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontFamily: "var(--font-mono)",
+                          color: "var(--text-tertiary)",
+                          width: 20,
+                          textAlign: "right",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {index + 1}
+                      </span>
+                      <img
+                        src={safeAssetUrl(path)}
+                        alt=""
+                        className="h-7 w-7 rounded object-cover shrink-0"
+                        style={{ border: "1px solid var(--bg-border)" }}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                      <span className="flex-1 truncate">{getFilename(path)}</span>
+                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => moveFrame(index, -1)}
+                          disabled={index === 0}
+                          className="btn-icon p-0.5 disabled:opacity-30"
+                        >
+                          <ArrowUp className="h-3 w-3" strokeWidth={1.5} />
+                        </button>
+                        <button
+                          onClick={() => moveFrame(index, 1)}
+                          disabled={index === frames.length - 1}
+                          className="btn-icon p-0.5 disabled:opacity-30"
+                        >
+                          <ArrowDown className="h-3 w-3" strokeWidth={1.5} />
+                        </button>
+                        <button onClick={() => removeFrame(index)} className="btn-icon p-0.5">
+                          <Trash2 className="h-3 w-3" strokeWidth={1.5} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1.5">
-          <label className="forge-label">{t("label.frame_delay")}</label>
-          <input
-            type="number"
-            min={10}
-            max={5000}
-            value={delayMs}
-            onChange={(e) => setDelayMs(Number(e.target.value))}
-            className="forge-input w-full"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <label className="forge-label">{t("label.loop_count")}</label>
-          <input
-            type="number"
-            min={0}
-            max={9999}
-            value={loopCount}
-            onChange={(e) => setLoopCount(Number(e.target.value))}
-            className="forge-input w-full"
-          />
-        </div>
-      </div>
-
-      <ActionButton
-        onClick={handleCreate}
-        disabled={frames.length < 2}
-        loading={loading}
-        loadingText={t("status.creating_animation")}
-        text={t("action.create_animation")}
-        icon={<Film className="h-4 w-4" strokeWidth={1.5} />}
+        }
+        results={
+          hasResults && (
+            <div className="forge-card space-y-2">
+              <div className="flex items-center gap-2">
+                {result.errors.length === 0 ? (
+                  <CheckCircle className="h-4 w-4" style={{ color: "var(--success)" }} strokeWidth={1.5} />
+                ) : (
+                  <XCircle className="h-4 w-4" style={{ color: "var(--warning)" }} strokeWidth={1.5} />
+                )}
+                <span style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}>
+                  {t("result.animation_created", { frames: result.frame_count, format: "GIF" })}
+                </span>
+              </div>
+              {/* GIF preview */}
+              {result.output_path && (
+                <div
+                  className="overflow-hidden flex items-center justify-center max-h-96"
+                  style={{ borderRadius: 12, border: "1px solid var(--bg-border)", background: "var(--bg-base)" }}
+                >
+                  <img
+                    src={safeAssetUrl(result.output_path, true)}
+                    alt="Generated GIF"
+                    className="max-h-96 object-contain"
+                  />
+                </div>
+              )}
+              {result.errors.length > 0 && (
+                <div className="max-h-24 overflow-y-auto space-y-1">
+                  {result.errors.map((err, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-2"
+                      style={{ fontSize: "var(--text-sm)", color: "rgba(239,68,68,0.8)" }}
+                    >
+                      <XCircle className="h-3 w-3 shrink-0 mt-0.5" strokeWidth={1.5} />
+                      <span>{err}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        }
       />
 
-      {result && result.frame_count > 0 && (
-        <div className="mt-4 forge-card space-y-2">
-          <div className="flex items-center gap-2">
-            {result.errors.length === 0 ? (
-              <CheckCircle className="h-4 w-4" style={{ color: "var(--success)" }} strokeWidth={1.5} />
-            ) : (
-              <XCircle className="h-4 w-4" style={{ color: "var(--warning)" }} strokeWidth={1.5} />
-            )}
-            <span style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}>
-              {t("result.animation_created", { frames: result.frame_count, format: "GIF" })}
-            </span>
+      <ControlsPanel
+        disabled={isEmpty}
+        action={
+          <ActionButton
+            onClick={handleCreate}
+            disabled={frames.length < 2}
+            loading={loading}
+            loadingText={t("status.creating_animation")}
+            text={t("action.create_animation")}
+            icon={<Film className="h-4 w-4" strokeWidth={1.5} />}
+          />
+        }
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className="forge-label">{t("label.frame_delay")}</label>
+            <input
+              type="number"
+              min={10}
+              max={5000}
+              value={delayMs}
+              onChange={(e) => setDelayMs(Number(e.target.value))}
+              className="forge-input w-full"
+            />
           </div>
-          {/* GIF preview */}
-          {result.output_path && (
-            <div
-              className="overflow-hidden flex items-center justify-center max-h-48"
-              style={{ borderRadius: 12, border: "1px solid var(--bg-border)", background: "var(--bg-base)" }}
-            >
-              <img
-                src={safeAssetUrl(result.output_path, true)}
-                alt="Generated GIF"
-                className="max-h-48 object-contain"
-              />
-            </div>
-          )}
-          {result.errors.length > 0 && (
-            <div className="max-h-24 overflow-y-auto space-y-1">
-              {result.errors.map((err, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-2"
-                  style={{ fontSize: "var(--text-sm)", color: "rgba(239,68,68,0.8)" }}
-                >
-                  <XCircle className="h-3 w-3 shrink-0 mt-0.5" strokeWidth={1.5} />
-                  <span>{err}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="space-y-1.5">
+            <label className="forge-label">{t("label.loop_count")}</label>
+            <input
+              type="number"
+              min={0}
+              max={9999}
+              value={loopCount}
+              onChange={(e) => setLoopCount(Number(e.target.value))}
+              className="forge-input w-full"
+            />
+          </div>
         </div>
-      )}
+      </ControlsPanel>
     </div>
   );
 }
