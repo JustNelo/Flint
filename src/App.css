@@ -495,7 +495,7 @@ body::after {
 
 .cmd-container {
   background: var(--flint-bg-surface);
-  border: 1px solid var(--flint-border-accent);
+  border: 1px solid var(--flint-border);
   border-radius: var(--flint-radius-lg);
   width: 440px;
   max-width: calc(100vw - 48px);
@@ -574,12 +574,11 @@ body::after {
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: 12px;
+  line-height: 1;
   color: var(--flint-text-secondary);
-  border-left: 2px solid transparent;
 }
 .cmd-item[data-active="true"] {
-  background: linear-gradient(90deg, var(--flint-bg-elevated), transparent);
-  border-left: 2px solid var(--flint-accent);
+  background: var(--flint-bg-elevated);
   color: var(--flint-text-primary);
 }
 .cmd-item-icon {

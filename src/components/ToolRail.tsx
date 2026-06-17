@@ -141,15 +141,6 @@ export function ToolRail({ sections, activeTab, onSelect, onOpenCommand, appVers
                   onMouseEnter={() => setHoveredId(tab.id)}
                   onMouseLeave={() => setHoveredId(null)}
                 >
-                  <span
-                    className="absolute left-0 top-1/2 -translate-y-1/2"
-                    style={{
-                      width: 2,
-                      height: 16,
-                      borderRadius: 1,
-                      background: isActive ? "var(--indigo-core)" : "transparent",
-                    }}
-                  />
                   <Icon
                     style={{
                       width: 16,
@@ -159,7 +150,7 @@ export function ToolRail({ sections, activeTab, onSelect, onOpenCommand, appVers
                     }}
                     strokeWidth={1.5}
                   />
-                  {pinned && t(tab.labelKey)}
+                  {pinned && <span style={{ lineHeight: 1 }}>{t(tab.labelKey)}</span>}
                 </button>
               );
             })}
