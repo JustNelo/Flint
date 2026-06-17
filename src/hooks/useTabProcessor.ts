@@ -10,7 +10,6 @@ import type { TabId, BatchProgress, ProcessingResult } from "../types";
 interface UseTabProcessorOptions {
   tabId: TabId;
   command: string;
-  acceptToast?: string;
 }
 
 interface ProcessCallOptions {
@@ -18,7 +17,7 @@ interface ProcessCallOptions {
   successMessage: string;
 }
 
-export function useTabProcessor({ tabId, command, acceptToast }: UseTabProcessorOptions) {
+export function useTabProcessor({ tabId, command }: UseTabProcessorOptions) {
   const { t } = useT();
   const fileSelection = useFileSelection();
   const { getOutputDir } = useWorkspace();
@@ -42,7 +41,7 @@ export function useTabProcessor({ tabId, command, acceptToast }: UseTabProcessor
   const process = useCallback(
     async ({ extraParams, successMessage }: ProcessCallOptions) => {
       if (fileSelection.files.length === 0) {
-        toast.error(acceptToast || t("toast.select_images"));
+        toast.error(t("toast.select_images"));
         return;
       }
       const outputDir = await getOutputDir(tabId);
@@ -83,7 +82,7 @@ export function useTabProcessor({ tabId, command, acceptToast }: UseTabProcessor
         setLoading(false);
       }
     },
-    [fileSelection.files, command, tabId, getOutputDir, acceptToast, t],
+    [fileSelection.files, command, tabId, getOutputDir, t],
   );
 
   return {
@@ -91,7 +90,6 @@ export function useTabProcessor({ tabId, command, acceptToast }: UseTabProcessor
     addFiles: fileSelection.addFiles,
     removeFile: fileSelection.removeFile,
     clearFiles: fileSelection.clearFiles,
-    setFiles: fileSelection.setFiles,
     reorderFiles: fileSelection.reorderFiles,
     handleFilesSelected,
     handleClearFiles,
