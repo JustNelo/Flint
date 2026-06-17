@@ -795,7 +795,8 @@ export function PdfWorkbenchTab() {
                     <Zap className="h-3.5 w-3.5" strokeWidth={1.5} />
                     {t("pdf_tool.compress")}
                     <div
-                      className={cn("ml-auto h-4 w-7 rounded-full transition-all", ppCompress ? "bg-indigo-400" : "")}
+                      className="ml-auto h-4 w-7 rounded-full transition-all"
+                      style={{ background: ppCompress ? "var(--indigo-core)" : "var(--bg-overlay)" }}
                     >
                       <div
                         className={cn(
@@ -829,7 +830,8 @@ export function PdfWorkbenchTab() {
                     <Shield className="h-3.5 w-3.5" strokeWidth={1.5} />
                     {t("pdf_tool.protect")}
                     <div
-                      className={cn("ml-auto h-4 w-7 rounded-full transition-all", ppProtect ? "bg-indigo-400" : "")}
+                      className="ml-auto h-4 w-7 rounded-full transition-all"
+                      style={{ background: ppProtect ? "var(--indigo-core)" : "var(--bg-overlay)" }}
                     >
                       <div
                         className={cn(

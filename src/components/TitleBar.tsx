@@ -42,19 +42,8 @@ export function TitleBar({ onShowSettings }: TitleBarProps) {
       className="relative z-20 flex shrink-0 items-center justify-between select-none"
       style={{ height: 36, background: "var(--bg-surface)", borderBottom: "1px solid var(--bg-border)" }}
     >
-      <div className="flex items-center gap-2 px-3 pointer-events-none">
-        <FlintLogo size={16} />
-        <span
-          style={{
-            fontSize: "var(--text-sm)",
-            fontWeight: 600,
-            color: "var(--text-primary)",
-            fontFamily: "var(--font-sans)",
-            letterSpacing: "-0.01em",
-          }}
-        >
-          Flint
-        </span>
+      <div className="flex items-center px-3 pointer-events-none">
+        <FlintLogo size={18} />
       </div>
 
       <div className="flex h-full items-center">
