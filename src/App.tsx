@@ -39,7 +39,6 @@ import { Base64Tab } from "./components/Base64Tab";
 import { QrCodeTab } from "./components/QrCodeTab";
 import { BulkRenameTab } from "./components/BulkRenameTab";
 import { SvgRasterizeTab } from "./components/SvgRasterizeTab";
-import { HistoryModal } from "./components/HistoryModal";
 import { GlobalProgressBar } from "./components/GlobalProgressBar";
 import { SplashScreen } from "./components/SplashScreen";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -180,7 +179,6 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabId>("compress");
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     try {
@@ -237,7 +235,7 @@ function App() {
 
   return (
     <div className="relative flex h-screen w-screen flex-col overflow-hidden" style={{ background: "var(--bg-base)" }}>
-      <TitleBar onShowHistory={() => setShowHistory(true)} onShowSettings={() => setShowSettings(true)} />
+      <TitleBar onShowSettings={() => setShowSettings(true)} />
       <UpdateBanner status={updateStatus} version={updateVersion} onInstall={installUpdate} onDismiss={dismissUpdate} />
 
       <WorkbenchShell
@@ -322,7 +320,6 @@ function App() {
         }}
       />
 
-      {showHistory && <HistoryModal onClose={() => setShowHistory(false)} />}
       {showSettings && (
         <SettingsPanel
           onClose={() => setShowSettings(false)}

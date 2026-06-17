@@ -11,7 +11,6 @@ import { ControlsPanel } from "./ControlsPanel";
 import { Slider } from "./ui/Slider";
 import { useFileSelection } from "../hooks/useFileSelection";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { useHistory } from "../hooks/useHistory";
 import { usePersistedState } from "../hooks/usePersistedState";
 import { useT } from "../i18n/i18n";
 import type { BatchProgress, ProcessingResult } from "../types";
@@ -22,7 +21,6 @@ export function CompressTab() {
   const { t } = useT();
   const { files, addFiles, removeFile, clearFiles, reorderFiles } = useFileSelection();
   const { getOutputDir } = useWorkspace();
-  const { addEntry } = useHistory();
   const [format, setFormat] = usePersistedState<CompressFormat>("compress.format", "webp");
   const [quality, setQuality] = usePersistedState("compress.quality", 80);
   const [loading, setLoading] = useState(false);
@@ -71,10 +69,6 @@ export function CompressTab() {
       setResults(result.results);
       if (result.results.length > 0) setPanelMode("results");
 
-      const successCount = result.results.filter((r) => r.success).length;
-      const failCount = result.results.filter((r) => !r.success).length;
-      addEntry({ tabId: "compress", filesCount: result.total, successCount, failCount, outputDir });
-
       if (result.completed === result.total) {
         toast.success(t("toast.compress_success", { n: result.completed, format: format.toUpperCase() }));
       } else if (result.completed > 0) {
@@ -87,7 +81,7 @@ export function CompressTab() {
     } finally {
       setLoading(false);
     }
-  }, [files, format, quality, getOutputDir, addEntry, t]);
+  }, [files, format, quality, getOutputDir, t]);
 
   const isEmpty = files.length === 0;
 

@@ -1,14 +1,13 @@
 import { useCallback, useMemo } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, Square, X, Clock, Settings } from "lucide-react";
+import { Minus, Square, X, Settings } from "lucide-react";
 import { FlintLogo } from "./FlintLogo";
 
 interface TitleBarProps {
-  onShowHistory?: () => void;
   onShowSettings?: () => void;
 }
 
-export function TitleBar({ onShowHistory, onShowSettings }: TitleBarProps) {
+export function TitleBar({ onShowSettings }: TitleBarProps) {
   const appWindow = useMemo(() => getCurrentWindow(), []);
 
   const handleMinimize = useCallback(async () => {
@@ -59,30 +58,7 @@ export function TitleBar({ onShowHistory, onShowSettings }: TitleBarProps) {
       </div>
 
       <div className="flex h-full items-center">
-        {/* History + Settings */}
-        <button
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={onShowHistory}
-          className="flex h-full items-center justify-center"
-          style={{
-            width: 36,
-            color: "var(--text-tertiary)",
-            transition: "all 150ms ease",
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--bg-overlay)";
-            e.currentTarget.style.color = "var(--text-secondary)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = "var(--text-tertiary)";
-          }}
-        >
-          <Clock className="h-3.5 w-3.5" strokeWidth={1.5} />
-        </button>
+        {/* Settings */}
         <button
           onMouseDown={(e) => e.stopPropagation()}
           onClick={onShowSettings}

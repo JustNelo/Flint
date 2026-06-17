@@ -273,11 +273,6 @@
   "exif.no_metadata": "Aucune métadonnée EXIF",
   "exif.n_fields": "{n} champs de métadonnées",
 
-  "history.title": "Historique",
-  "history.clear": "Effacer",
-  "history.empty": "Aucune opération enregistrée.",
-  "history.succeeded": "réussie(s)",
-
   "toast.workspace_missing": "Veuillez définir un dossier de travail dans les Paramètres.",
   "toast.watermark_text_missing": "Veuillez saisir un texte de filigrane.",
   "toast.watermark_image_missing": "Veuillez sélectionner une image de filigrane.",

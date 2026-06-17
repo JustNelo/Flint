@@ -273,11 +273,6 @@
   "exif.no_metadata": "No EXIF metadata",
   "exif.n_fields": "{n} metadata fields",
 
-  "history.title": "History",
-  "history.clear": "Clear",
-  "history.empty": "No operations recorded yet.",
-  "history.succeeded": "succeeded",
-
   "toast.workspace_missing": "Please set a workspace folder in Settings.",
   "toast.watermark_text_missing": "Please enter watermark text.",
   "toast.watermark_image_missing": "Please select a watermark image.",

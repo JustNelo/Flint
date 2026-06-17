@@ -11,7 +11,6 @@ import { ControlsPanel } from "./ControlsPanel";
 import { Slider } from "./ui/Slider";
 import { useFileSelection } from "../hooks/useFileSelection";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { useHistory } from "../hooks/useHistory";
 import { useT } from "../i18n/i18n";
 
 interface SvgRasterizeResult {
@@ -26,7 +25,6 @@ export function SvgRasterizeTab() {
   const { t } = useT();
   const { files, addFiles, removeFile, clearFiles, reorderFiles } = useFileSelection();
   const { getOutputDir } = useWorkspace();
-  const { addEntry } = useHistory();
   const [targetWidth, setTargetWidth] = useState(1024);
   const [outputFormat, setOutputFormat] = useState<SvgOutputFormat>("png");
   const [loading, setLoading] = useState(false);
@@ -74,14 +72,13 @@ export function SvgRasterizeTab() {
 
       setResult(res);
       setPanelMode("results");
-      addEntry({ tabId: "svg-rasterize", filesCount: 1, successCount: 1, failCount: 0, outputDir });
       toast.success(t("toast.svg_rasterize_success", { w: res.width, h: res.height }));
     } catch (err) {
       toast.error(t("toast.operation_failed"));
     } finally {
       setLoading(false);
     }
-  }, [files, targetWidth, outputFormat, getOutputDir, addEntry, t]);
+  }, [files, targetWidth, outputFormat, getOutputDir, t]);
 
   const isEmpty = files.length === 0;
 

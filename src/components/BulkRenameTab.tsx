@@ -9,7 +9,6 @@ import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
 import { ControlsPanel } from "./ControlsPanel";
 import { useFileSelection } from "../hooks/useFileSelection";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { useHistory } from "../hooks/useHistory";
 import { useT } from "../i18n/i18n";
 
 interface RenameEntry {
@@ -29,7 +28,6 @@ export function BulkRenameTab() {
   const { t } = useT();
   const { files, addFiles, removeFile, clearFiles, reorderFiles } = useFileSelection();
   const { getOutputDir } = useWorkspace();
-  const { addEntry } = useHistory();
   const [pattern, setPattern] = useState("{name}_{index}");
   const [startIndex, setStartIndex] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -101,14 +99,6 @@ export function BulkRenameTab() {
       setResult(res);
       if (res.renamed_count > 0) setPanelMode("results");
 
-      addEntry({
-        tabId: "bulk-rename",
-        filesCount: files.length,
-        successCount: res.renamed_count,
-        failCount: res.errors.length,
-        outputDir,
-      });
-
       if (res.renamed_count > 0 && res.errors.length === 0) {
         toast.success(t("toast.rename_success", { n: res.renamed_count }));
       } else if (res.renamed_count > 0) {
@@ -121,7 +111,7 @@ export function BulkRenameTab() {
     } finally {
       setLoading(false);
     }
-  }, [files, pattern, startIndex, getOutputDir, addEntry, t]);
+  }, [files, pattern, startIndex, getOutputDir, t]);
 
   const isEmpty = files.length === 0;
   const hasResults = result !== null && result.renamed_count > 0;

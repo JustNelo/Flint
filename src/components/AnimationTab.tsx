@@ -7,7 +7,6 @@ import { ActionButton } from "./ui/ActionButton";
 import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
 import { ControlsPanel } from "./ControlsPanel";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { useHistory } from "../hooks/useHistory";
 import { useT } from "../i18n/i18n";
 import { safeAssetUrl } from "../lib/utils";
 
@@ -21,7 +20,6 @@ interface AnimationResult {
 export function AnimationTab() {
   const { t } = useT();
   const { getOutputDir } = useWorkspace();
-  const { addEntry } = useHistory();
   const [frames, setFrames] = useState<string[]>([]);
   const [delayMs, setDelayMs] = useState(100);
   const [loopCount, setLoopCount] = useState(0);
@@ -80,15 +78,6 @@ export function AnimationTab() {
       setResult(res);
       if (res.frame_count > 0) setPanelMode("results");
 
-      const successCount = res.frame_count > 0 ? 1 : 0;
-      addEntry({
-        tabId: "animation",
-        filesCount: frames.length,
-        successCount,
-        failCount: res.errors.length,
-        outputDir,
-      });
-
       if (res.frame_count > 0 && res.errors.length === 0) {
         toast.success(t("toast.animation_success", { frames: res.frame_count }));
       } else if (res.frame_count > 0) {
@@ -101,7 +90,7 @@ export function AnimationTab() {
     } finally {
       setLoading(false);
     }
-  }, [frames, delayMs, loopCount, getOutputDir, addEntry, t]);
+  }, [frames, delayMs, loopCount, getOutputDir, t]);
 
   const getFilename = (path: string) => {
     const parts = path.replace(/\\/g, "/").split("/");

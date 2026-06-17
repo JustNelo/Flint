@@ -11,7 +11,6 @@ import { ControlsPanel } from "./ControlsPanel";
 import { Slider } from "./ui/Slider";
 import { useFileSelection } from "../hooks/useFileSelection";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { useHistory } from "../hooks/useHistory";
 import { useT } from "../i18n/i18n";
 import type { BatchProgress, ProcessingResult, ResizeMode } from "../types";
 
@@ -35,7 +34,6 @@ export function ResizeTab() {
   const { t } = useT();
   const { files, addFiles, removeFile, clearFiles, reorderFiles } = useFileSelection();
   const { getOutputDir } = useWorkspace();
-  const { addEntry } = useHistory();
   const [mode, setMode] = useState<ResizeMode>("percentage");
   const [width, setWidth] = useState(800);
   const [height, setHeight] = useState(600);
@@ -88,10 +86,6 @@ export function ResizeTab() {
       setResults(result.results);
       if (result.results.length > 0) setPanelMode("results");
 
-      const successCount = result.results.filter((r) => r.success).length;
-      const failCount = result.results.filter((r) => !r.success).length;
-      addEntry({ tabId: "resize", filesCount: result.total, successCount, failCount, outputDir });
-
       if (result.completed === result.total) {
         toast.success(t("toast.resize_success", { n: result.completed }));
       } else if (result.completed > 0) {
@@ -104,7 +98,7 @@ export function ResizeTab() {
     } finally {
       setLoading(false);
     }
-  }, [files, mode, width, height, percentage, getOutputDir, addEntry, t]);
+  }, [files, mode, width, height, percentage, getOutputDir, t]);
 
   const isEmpty = files.length === 0;
 

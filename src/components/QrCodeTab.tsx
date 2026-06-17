@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { ActionButton } from "./ui/ActionButton";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { useHistory } from "../hooks/useHistory";
 import { useT } from "../i18n/i18n";
 import { logError } from "../lib/utils";
 
@@ -27,7 +26,6 @@ const PANEL: React.CSSProperties = {
 export function QrCodeTab() {
   const { t } = useT();
   const { getOutputDir } = useWorkspace();
-  const { addEntry } = useHistory();
   const [text, setText] = useState("");
   const [size, setSize] = useState(512);
   const [previewB64, setPreviewB64] = useState<string | null>(null);
@@ -75,13 +73,6 @@ export function QrCodeTab() {
     try {
       const res = await invoke<QrResult>("generate_qr_cmd", { text: content, size, outputDir });
       setResult(res);
-      addEntry({
-        tabId: "qrcode",
-        filesCount: 1,
-        successCount: res.output_path ? 1 : 0,
-        failCount: res.errors.length,
-        outputDir,
-      });
       if (res.output_path && res.errors.length === 0) {
         toast.success(t("toast.qr_success"));
       } else {
@@ -93,7 +84,7 @@ export function QrCodeTab() {
     } finally {
       setSaving(false);
     }
-  }, [content, size, getOutputDir, addEntry, t]);
+  }, [content, size, getOutputDir, t]);
 
   const handleCopy = useCallback(async () => {
     if (!previewB64) return;
