@@ -436,5 +436,13 @@
   "action.copy_datauri": "Copier le data URI",
   "action.copy_img": "Copier <img>",
   "action.copy_css": "Copier CSS",
-  "action.copy_all_hex": "Copier tout (HEX)"
+  "action.copy_all_hex": "Copier tout (HEX)",
+
+  "viewer.page_count": "Page {n} / {total}",
+  "viewer.zoom_in": "Agrandir",
+  "viewer.zoom_out": "Réduire",
+  "viewer.fit_width": "Ajuster la largeur",
+  "viewer.rendering": "Rendu de la page",
+  "viewer.close": "Fermer",
+  "action.view": "Voir"
 }
