@@ -184,6 +184,55 @@ pub fn get_pdf_page_count(pdf_path: &str, pdfium: &Pdfium) -> Result<usize, Stri
     Ok(document.pages().len() as usize)
 }
 
+/// Render a single PDF page (1-indexed) to a base64 JPEG at `target_width` px.
+/// No file is written — used by the in-app scrolling viewer for lazy per-page rendering.
+pub fn render_pdf_page_base64(
+    pdf_path: &str,
+    page_number: usize,
+    target_width: u32,
+    pdfium: &Pdfium,
+) -> Result<String, String> {
+    use base64::Engine;
+
+    let document = pdfium
+        .load_pdf_from_file(pdf_path, None)
+        .map_err(|e| format!("Cannot open PDF '{}': {}", pdf_path, e))?;
+
+    let total_pages = document.pages().len() as usize;
+    if page_number < 1 || page_number > total_pages {
+        return Err(format!(
+            "Page {} out of range (1..={})",
+            page_number, total_pages
+        ));
+    }
+    let target_idx = page_number - 1;
+
+    let width = target_width.clamp(64, 2400);
+
+    for (page_index, page) in document.pages().iter().enumerate() {
+        if page_index != target_idx {
+            continue;
+        }
+        let bitmap = page
+            .render_with_config(
+                &PdfRenderConfig::new()
+                    .set_target_width(width as i32)
+                    .set_maximum_height((width * 6) as i32),
+            )
+            .map_err(|e| format!("Render failed for page {}: {}", page_number, e))?;
+
+        let rgb = image::DynamicImage::ImageRgb8(bitmap.as_image().to_rgb8());
+        let mut buf: Vec<u8> = Vec::new();
+        let encoder = JpegEncoder::new_with_quality(Cursor::new(&mut buf), 85);
+        rgb.write_with_encoder(encoder)
+            .map_err(|e| format!("JPEG encode failed for page {}: {}", page_number, e))?;
+
+        return Ok(base64::engine::general_purpose::STANDARD.encode(&buf));
+    }
+
+    Err(format!("Page {} not found", page_number))
+}
+
 pub fn generate_thumbnails_batch(
     file_paths: Vec<String>,
     pdfium: &Pdfium,
