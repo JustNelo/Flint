@@ -728,6 +728,11 @@ async fn generate_qr_cmd(text: String, size: u32, output_dir: String) -> Result<
 }
 
 #[tauri::command]
+async fn generate_qr_preview(text: String, size: u32) -> Result<String, String> {
+    run_blocking(move || qr_ops::generate_qr_base64(&text, size)).await?
+}
+
+#[tauri::command]
 async fn rasterize_svg_cmd(
     input_path: String,
     target_width: u32,
@@ -833,6 +838,7 @@ pub fn run() {
             watermark_pdf_image_cmd,
             image_to_base64,
             generate_qr_cmd,
+            generate_qr_preview,
             bulk_rename_cmd,
             rasterize_svg_cmd,
             cancel_processing,
