@@ -1,193 +1,163 @@
 <div align="center">
 
-<img src="rust-ine-app-icon.png" width="120" alt="Rust-ine icon" />
+<img src="src-tauri/icons/128x128.png" width="96" alt="Flint" />
 
-# Rust-ine
+# Flint
 
-**Image & PDF Swiss Army Knife**
-
-A fast, modern desktop app for batch image processing, PDF manipulation, and developer utilities.
-Built with **Tauri v2** and powered by parallel **Rust** processing.
+Batch image processing, PDF tools, and developer utilities in one fast desktop app.
 
 [![Build & Release](https://github.com/JustNelo/Rust-ine/actions/workflows/release.yml/badge.svg)](https://github.com/JustNelo/Rust-ine/actions/workflows/release.yml)
-[![Version](https://img.shields.io/github/v/tag/JustNelo/Rust-ine?label=version&color=6366f1)](https://github.com/JustNelo/Rust-ine/releases/latest)
-[![License](https://img.shields.io/badge/license-Source%20Available-blue)](https://github.com/JustNelo/Rust-ine#license)
-
-[Download](#-download) · [Features](#-features) · [Tech Stack](#-tech-stack) · [Getting Started](#-getting-started) · [Architecture](#-architecture)
+[![Version](https://img.shields.io/github/v/tag/JustNelo/Rust-ine?label=version&color=e8572a)](https://github.com/JustNelo/Rust-ine/releases/latest)
+[![License](https://img.shields.io/badge/license-Source%20Available-555)](#license)
 
 </div>
 
 ---
 
-## 📦 Download
+Flint is a Tauri v2 desktop application that bundles common image, PDF, and developer tasks behind a single, fast interface. Heavy work runs in parallel on a Rust backend, so the UI stays responsive on large batches.
 
-Grab the latest installer from the [**Releases page**](https://github.com/JustNelo/Rust-ine/releases/latest).
+## Download
 
-| Platform | File | Format |
-| :------- | :--- | :----- |
-| Windows  | `Rust-ine_x.x.x_x64-setup.exe` | NSIS installer |
-| Linux    | `Rust-ine_x.x.x_amd64.deb` / `.rpm` / `.AppImage` | DEB / RPM / AppImage |
+Get the latest installer from the [Releases page](https://github.com/JustNelo/Rust-ine/releases/latest).
 
-> The app includes **built-in auto-updates** — you'll be notified when a new version is available.
+| Platform | Format |
+| :--- | :--- |
+| Windows | NSIS installer (`.exe`) |
+| Linux | `.deb`, `.rpm`, `.AppImage` |
 
----
+The app updates itself and notifies you when a new version is available.
 
-## ✨ Features
+## Features
 
-### 🖼️ Image Tools
-
-| Tool | Description |
-| :--- | :---------- |
-| **Compress** | Batch compress to WebP or JPEG with adjustable quality slider |
-| **Convert** | Convert between PNG, JPEG, WebP, BMP, ICO, TIFF formats |
-| **Resize** | Resize with presets (1080p, 4K, Instagram, YouTube) or custom dimensions |
-| **Crop** | Interactive crop with draggable handles and rule-of-thirds grid |
-| **Optimize** | Lossless PNG optimization via OxiPNG |
-| **Watermark** | Add text or image watermarks with live preview and tiled mode |
-| **EXIF Strip** | Remove metadata with detailed before/after view |
-| **Color Palette** | Extract dominant colors from images |
-| **SVG Rasterize** | Convert SVG files to PNG or WebP at any target width |
-
-### 📄 PDF Toolkit
+### Image tools
 
 | Tool | Description |
-| :--- | :---------- |
-| **Extract Images** | Extract embedded images from PDFs (JPEG, PNG, JPEG2000, TIFF, CCITT) |
-| **PDF to Images** | Render pages to images at custom DPI (72–1200) |
-| **Compress** | Reduce file size by re-encoding embedded images |
-| **Split** | Split PDFs by page ranges (`1-3, 5, 8-end`) |
-| **Merge / Builder** | Merge images and PDFs into a new document with drag-and-drop reordering |
-| **Protect** | Password-protect PDFs (PDF 1.7 standard security handler) |
-| **Unlock** | Remove password protection from PDFs |
-| **Text Watermark** | Overlay text watermarks on PDF pages with positioning and opacity |
-| **Image Watermark** | Stamp image watermarks on PDF pages with transparency support |
+| :--- | :--- |
+| Compress | Batch compression to WebP or JPEG with an adjustable quality slider |
+| Convert | Convert between PNG, JPEG, WebP, BMP, ICO and TIFF |
+| Resize | Presets (1080p, 4K, social formats) or custom dimensions |
+| Crop | Interactive crop with draggable handles and a rule-of-thirds grid |
+| Optimize | Lossless PNG optimization (OxiPNG) |
+| Watermark | Text or image watermarks with live preview and a tiled mode |
+| EXIF Strip | Remove metadata with a before/after view |
+| Color Palette | Extract the dominant colors from an image |
+| SVG Rasterize | Render SVG to PNG or WebP at any target width |
 
-### 🛠️ Developer Tools
+### PDF toolkit
 
 | Tool | Description |
-| :--- | :---------- |
-| **Favicon Generator** | Generate multi-size `.ico`, PNGs and `webmanifest` from any image |
-| **GIF / Animation** | Create animated GIFs from image sequences with reordering |
-| **Sprite Sheet** | Combine images into a sprite sheet + JSON atlas |
-| **Image to Base64** | Convert images to data URI strings with one-click copy |
-| **QR Code** | Generate QR code PNGs from text or URLs |
-| **Bulk Rename** | Rename files with pattern tokens (`{name}`, `{index}`, `{date}`, `{ext}`) |
+| :--- | :--- |
+| Build | Merge images and PDF pages into a new document, with drag-and-drop reordering |
+| Split | Split a PDF by page ranges (`1-3, 5, 8-end`) |
+| Export to images | Render pages to images at a custom DPI (72–1200) |
+| Extract images | Pull embedded images out of a PDF |
+| Watermark | Stamp text or image watermarks onto pages |
+| Compress | Reduce size by re-encoding embedded images |
+| Protect / Unlock | Add or remove PDF password protection |
 
-### 🎨 User Experience
+### Developer tools
 
-- **Before/After Slider** — drag to compare original vs processed images
-- **Results Banner** — thumbnails, size stats, compression %, per-file feedback
-- **Global Progress Bar** — real-time batch progress with cancel button
-- **Dark / Light Theme** — glassmorphism UI with ambient background
-- **Internationalization** — English & French
-- **Onboarding** — guided workspace setup on first launch
-- **Session History** — review past operations
-- **Keyboard Shortcuts** — `Ctrl+O` open, `Ctrl+V` paste, `Ctrl+L` clear
-- **Auto-updater** — one-click update from Settings
+| Tool | Description |
+| :--- | :--- |
+| Favicon | Generate a multi-size `.ico`, PNGs and a web manifest from one image |
+| Animation | Build animated GIFs from image sequences |
+| Sprite Sheet | Combine images into a sprite sheet and a JSON atlas |
+| Image to Base64 | Convert an image to a data URI |
+| QR Code | Generate a QR code PNG from text or a URL |
+| Bulk Rename | Rename files with pattern tokens (`{name}`, `{index}`, `{date}`, `{ext}`) |
 
----
+### Throughout
 
-## 🔧 Tech Stack
+- Two-pane workbench: source material on the left, settings and results on the right.
+- Command palette (`Ctrl/Cmd + K`) to jump to any tool.
+- Before/after slider, per-file results, and a global progress bar with cancel.
+- A configurable output workspace with per-tool subfolders.
+- English and French, dark theme, guided first-run setup, and built-in updates.
+- Keyboard shortcuts: `Ctrl+Enter` to run, `Ctrl+L` to clear, `Esc` to cancel.
+
+## Tech stack
 
 | Layer | Technology |
-| :---- | :--------- |
-| **Runtime** | [Tauri v2](https://v2.tauri.app/) — Rust backend + native WebView |
-| **Backend** | Rust 2021 · Rayon · image · webp · lopdf · pdfium-render · OxiPNG · Tokio |
-| **Frontend** | React 19 · TypeScript · Tailwind CSS v4 · Vite 7 |
-| **UI** | shadcn/ui patterns · Lucide icons · Sonner toasts · dnd-kit |
-| **Package Manager** | [Bun](https://bun.sh/) |
-| **CI/CD** | GitHub Actions — lint, test, build & release for Windows + Linux |
+| :--- | :--- |
+| Runtime | Tauri v2 (Rust backend, native WebView) |
+| Backend | Rust 2021, Rayon, image, webp, lopdf, pdfium-render, OxiPNG, Tokio |
+| Frontend | React 19, TypeScript, Tailwind CSS v4, Vite |
+| UI | Lucide icons, Sonner, dnd-kit |
+| Tooling | Bun, GitHub Actions (lint, test, build, release) |
 
----
-
-## 🚀 Getting Started
+## Getting started
 
 ### Prerequisites
 
-- [Rust](https://www.rust-lang.org/tools/install) (stable toolchain with `clippy` and `rustfmt`)
-- [Bun](https://bun.sh/) (or Node.js >= 18)
-- Platform-specific Tauri v2 system deps — see the [Tauri prerequisites guide](https://v2.tauri.app/start/prerequisites/)
-- PDFium library in `src-tauri/resources/` (`pdfium.dll` on Windows, `libpdfium.so` on Linux)
+- Rust (stable toolchain, with `clippy` and `rustfmt`)
+- Bun (or Node.js 18+)
+- Tauri v2 system dependencies — see the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
+- PDFium in `src-tauri/resources/` (`pdfium.dll` on Windows, `libpdfium.so` on Linux)
 
-### Install & Run
+### Develop
 
 ```bash
-# Install frontend dependencies
-bun install
-
-# Run in development mode
-bun run tauri dev
-
-# Build for production
-bun run tauri build
+bun install          # install frontend dependencies
+bun run tauri dev    # run in development
+bun run tauri build  # build installers into src-tauri/target/release/bundle/
 ```
 
-The compiled binary and installer will be in `src-tauri/target/release/bundle/`.
-
-### Lint & Test
+### Check
 
 ```bash
 cd src-tauri
-
-# Format check
 cargo fmt --check
-
-# Lint
 cargo clippy -- -D warnings
-
-# Unit tests
 cargo test
 ```
 
----
+## Architecture
 
-## 🏛️ Architecture
+### Backend
 
-### Backend (Rust)
+Every Tauri command follows the same pipeline:
 
-Every Tauri command follows the same pattern:
+1. Validate input paths (absolute only, no `..`, symlinks resolved, allowed-directory check).
+2. Offload CPU-bound work to `tokio::task::spawn_blocking`.
+3. Parallelize per-file batches with `rayon`.
+4. Stream progress back to the UI through Tauri events.
 
-1. **Validate** input paths against traversal attacks (absolute-only, no `..`, symlink resolution, allowed-directory check).
-2. **Offload** CPU-intensive work to `tokio::task::spawn_blocking`.
-3. **Parallelize** image batches with `rayon::par_iter`.
-4. **Report** progress in real-time via Tauri events.
+PDFium is not thread-safe, so all PDF calls go through a single serialized instance.
 
 ```
 src-tauri/src/
-├── lib.rs              # Tauri commands, path validation, app setup
-├── image_ops.rs        # Image processing (compress, convert, resize, crop, watermark…)
-├── pdf_ops.rs          # PDF operations (extract, convert, compress, protect, unlock)
-├── pdf_builder_ops.rs  # PDF merge & thumbnail generation
-├── pdf_split_ops.rs    # PDF splitting by page ranges
-├── pdf_watermark_ops.rs# PDF watermarking (text & image)
-├── gif_ops.rs          # Animated GIF creation
-├── color_ops.rs        # Dominant color extraction
-├── favicon_ops.rs      # Favicon generation (ICO, PNG, webmanifest)
-├── metadata_ops.rs     # EXIF & image metadata reading
-├── rename_ops.rs       # Bulk file renaming
-├── sprite_ops.rs       # Sprite sheet generation
-├── svg_ops.rs          # SVG rasterization
-├── qr_ops.rs           # QR code generation
-├── utils.rs            # Shared utilities (path helpers, hex parsing, PDF embedding)
-└── progress.rs         # Progress event emission
+├── lib.rs               Tauri commands, path validation, app setup
+├── image_ops.rs         Compress, convert, resize, crop, watermark, strip, optimize
+├── pdf_ops.rs           Extract, render, compress, protect, unlock
+├── pdf_builder_ops.rs   Merge and page thumbnails
+├── pdf_split_ops.rs     Split by page ranges
+├── pdf_watermark_ops.rs Text and image watermarks
+├── color_ops.rs         Dominant color extraction
+├── favicon_ops.rs       Favicon generation
+├── gif_ops.rs           Animated GIF / WebP
+├── sprite_ops.rs        Sprite sheets
+├── metadata_ops.rs      EXIF reading
+├── qr_ops.rs            QR codes
+├── rename_ops.rs        Bulk rename
+├── svg_ops.rs           SVG rasterization
+├── utils.rs             Shared helpers (paths, PDF object cloning, encoding)
+└── progress.rs          Progress events
 ```
 
-### Frontend (React + TypeScript)
+### Frontend
 
-Component-per-tab architecture with shared hooks (`useFileSelection`, `useWorkspace`, `useProcessingProgress`) and reusable UI primitives (`ActionButton`, `Slider`, `DropZone`, `BeforeAfterSlider`, `ImageGrid`).
+One component per tool, sharing a common workbench shell and hooks (`useTabProcessor`, `useWorkspace`, `useProcessingProgress`) plus reusable primitives (`DropZone`, `ResultsBanner`, `BeforeAfterSlider`, `ImageGrid`). A small custom layer handles English and French.
 
 ### Security
 
-- **CSP** — restrictive `default-src 'self'` policy in `tauri.conf.json`
-- **Path validation** — all file paths checked for traversal, symlink escapes, and allowed-directory membership
-- **Scoped permissions** — Tauri capabilities limited to user directories only
-- **Input sanitization** — all numeric parameters clamped, file stems validated
-- **No shell execution** — zero `Command::new` calls
+- Restrictive `default-src 'self'` content security policy.
+- Path validation on every file input (traversal, symlink escape, allowed directories).
+- Tauri capabilities scoped to user directories.
+- Numeric inputs clamped and file names sanitized.
+- No shell execution.
 
----
+## License
 
-## 📄 License
+Copyright (c) 2025-2026 Léon Gallet.
 
-Copyright &copy; 2025-2026 Léon Gallet.
-
-This is a **Source Available** project. You are welcome to explore the code and run it for personal use. Redistribution, sub-licensing, or any commercial exploitation of the code or the application is strictly forbidden.
+Source-available. You may read the code and run it for personal use. Redistribution, sub-licensing, or any commercial use of the code or the application is not permitted.
