@@ -80,15 +80,13 @@ export function ToolRail({ sections, activeTab, onSelect, onOpenCommand, appVers
             <kbd
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 9,
+                fontSize: 11,
                 lineHeight: 1,
-                letterSpacing: "0.5px",
-                padding: "2px 5px",
-                borderRadius: 4,
-                background: "var(--bg-base)",
+                letterSpacing: "2px",
                 color: "var(--text-tertiary)",
                 whiteSpace: "nowrap",
                 flexShrink: 0,
+                marginRight: -2,
               }}
             >
               ⌘K
