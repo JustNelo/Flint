@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { PenLine, CheckCircle, XCircle } from "lucide-react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { PenLine, CheckCircle, XCircle, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 import { DropZone } from "./DropZone";
 import { ImageGrid } from "./ImageGrid";
@@ -33,6 +34,7 @@ export function BulkRenameTab() {
   const [startIndex, setStartIndex] = useState(1);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<RenameResult | null>(null);
+  const [lastOutputDir, setLastOutputDir] = useState("");
   const [panelMode, setPanelMode] = useState<MaterialMode>("material");
 
   const handleFilesSelected = useCallback(
@@ -87,6 +89,7 @@ export function BulkRenameTab() {
 
     setLoading(true);
     setResult(null);
+    setLastOutputDir(outputDir);
 
     try {
       const res = await invoke<RenameResult>("bulk_rename_cmd", {
@@ -167,15 +170,26 @@ export function BulkRenameTab() {
         results={
           result && (
             <div className="forge-card space-y-2">
-              <div className="flex items-center gap-2">
-                {result.errors.length === 0 ? (
-                  <CheckCircle className="h-4 w-4" style={{ color: "var(--success)" }} strokeWidth={1.5} />
-                ) : (
-                  <XCircle className="h-4 w-4" style={{ color: "var(--warning)" }} strokeWidth={1.5} />
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  {result.errors.length === 0 ? (
+                    <CheckCircle className="h-4 w-4 shrink-0" style={{ color: "var(--success)" }} strokeWidth={1.5} />
+                  ) : (
+                    <XCircle className="h-4 w-4 shrink-0" style={{ color: "var(--warning)" }} strokeWidth={1.5} />
+                  )}
+                  <span
+                    className="truncate"
+                    style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}
+                  >
+                    {t("result.renamed", { n: result.renamed_count })}
+                  </span>
+                </div>
+                {lastOutputDir && (
+                  <button onClick={() => revealItemInDir(lastOutputDir)} className="btn-ghost shrink-0">
+                    <FolderOpen className="h-3 w-3" strokeWidth={1.5} />
+                    {t("label.open_output_folder")}
+                  </button>
                 )}
-                <span style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}>
-                  {t("result.renamed", { n: result.renamed_count })}
-                </span>
               </div>
               {result.results.length > 0 && (
                 <div className="max-h-32 overflow-y-auto space-y-1">

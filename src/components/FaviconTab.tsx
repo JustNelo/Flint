@@ -115,6 +115,7 @@ export function FaviconTab() {
                 </span>
               ))}
               errors={result.errors}
+              revealPath={result.zip_path}
             />
           )
         }

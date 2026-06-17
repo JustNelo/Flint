@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Film, CheckCircle, XCircle, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { Film, CheckCircle, XCircle, ArrowUp, ArrowDown, Trash2, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
 import { DropZone } from "./DropZone";
 import { ActionButton } from "./ui/ActionButton";
@@ -192,15 +193,26 @@ export function AnimationTab() {
         results={
           hasResults && (
             <div className="forge-card space-y-2">
-              <div className="flex items-center gap-2">
-                {result.errors.length === 0 ? (
-                  <CheckCircle className="h-4 w-4" style={{ color: "var(--success)" }} strokeWidth={1.5} />
-                ) : (
-                  <XCircle className="h-4 w-4" style={{ color: "var(--warning)" }} strokeWidth={1.5} />
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  {result.errors.length === 0 ? (
+                    <CheckCircle className="h-4 w-4 shrink-0" style={{ color: "var(--success)" }} strokeWidth={1.5} />
+                  ) : (
+                    <XCircle className="h-4 w-4 shrink-0" style={{ color: "var(--warning)" }} strokeWidth={1.5} />
+                  )}
+                  <span
+                    className="truncate"
+                    style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}
+                  >
+                    {t("result.animation_created", { frames: result.frame_count, format: "GIF" })}
+                  </span>
+                </div>
+                {result.output_path && (
+                  <button onClick={() => revealItemInDir(result.output_path)} className="btn-ghost shrink-0">
+                    <FolderOpen className="h-3 w-3" strokeWidth={1.5} />
+                    {t("label.open_output_folder")}
+                  </button>
                 )}
-                <span style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}>
-                  {t("result.animation_created", { frames: result.frame_count, format: "GIF" })}
-                </span>
               </div>
               {/* GIF preview */}
               {result.output_path && (

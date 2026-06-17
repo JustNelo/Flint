@@ -124,6 +124,7 @@ export function SpriteSheetTab() {
                 </>
               }
               errors={result.errors}
+              revealPath={result.image_path}
             />
           )
         }

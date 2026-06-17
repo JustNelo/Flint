@@ -1,23 +1,41 @@
 import type { ReactNode } from "react";
-import { CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle, XCircle, FolderOpen } from "lucide-react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { useT } from "../i18n/i18n";
 
 interface ResultCardProps {
   success: boolean;
   title: string;
   chips?: ReactNode;
   errors: string[];
+  /** When set, shows an "open output folder" button that reveals this path. */
+  revealPath?: string;
 }
 
-export function ResultCard({ success, title, chips, errors }: ResultCardProps) {
+export function ResultCard({ success, title, chips, errors, revealPath }: ResultCardProps) {
+  const { t } = useT();
   return (
     <div className="forge-card space-y-3">
-      <div className="flex items-center gap-2">
-        {success ? (
-          <CheckCircle className="h-4 w-4" style={{ color: "var(--success)" }} strokeWidth={1.5} />
-        ) : (
-          <XCircle className="h-4 w-4" style={{ color: "var(--warning)" }} strokeWidth={1.5} />
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          {success ? (
+            <CheckCircle className="h-4 w-4 shrink-0" style={{ color: "var(--success)" }} strokeWidth={1.5} />
+          ) : (
+            <XCircle className="h-4 w-4 shrink-0" style={{ color: "var(--warning)" }} strokeWidth={1.5} />
+          )}
+          <span
+            className="truncate"
+            style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}
+          >
+            {title}
+          </span>
+        </div>
+        {revealPath && (
+          <button onClick={() => revealItemInDir(revealPath)} className="btn-ghost shrink-0">
+            <FolderOpen className="h-3 w-3" strokeWidth={1.5} />
+            {t("label.open_output_folder")}
+          </button>
         )}
-        <span style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}>{title}</span>
       </div>
 
       {chips && <div className="flex flex-wrap gap-1.5">{chips}</div>}
