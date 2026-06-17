@@ -30,10 +30,10 @@ export function getFileName(path: string): string {
  * Normalizes backslashes to forward slashes so the asset protocol
  * works correctly on Windows (Tauri issue #7970).
  */
-export function safeAssetUrl(filePath: string, bustCache = false): string {
+export function safeAssetUrl(filePath: string, bust?: string | number | false): string {
   const normalized = filePath.replace(/\\/g, "/");
   const base = convertFileSrc(normalized);
-  return bustCache ? `${base}?v=${encodeURIComponent(filePath)}` : base;
+  return bust ? `${base}?v=${encodeURIComponent(String(bust))}` : base;
 }
 
 /**
@@ -46,4 +46,33 @@ export function logError(context: string, err: unknown): void {
   // network) may reject with an Error or any other shape — normalize all of them.
   const message = err instanceof Error ? err.message : String(err);
   console.error(`[${context}]`, message, err);
+}
+
+/**
+ * Trigger a browser download of in-memory text content.
+ * Used by Palette exports (JSON / CSS) and any other "save this string" flow.
+ */
+export function downloadText(content: string, mime: string, filename: string): void {
+  const url = URL.createObjectURL(new Blob([content], { type: mime }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Tri-state thumbnail → original-image fallback.
+ * - a string thumb → use the bounded thumbnail;
+ * - null → no thumbnail available, fall back to the original asset;
+ * - undefined → still loading, render nothing yet.
+ */
+export function resolveThumb(
+  thumb: string | null | undefined,
+  path: string,
+  bust?: string | number,
+): string | undefined {
+  if (thumb) return thumb; // bounded thumbnail
+  if (thumb === null) return safeAssetUrl(path, bust); // explicit "no thumb" → original
+  return undefined; // undefined → still loading
 }

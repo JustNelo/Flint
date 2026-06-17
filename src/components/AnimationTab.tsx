@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Film, CheckCircle, XCircle, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -8,7 +8,7 @@ import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
 import { ControlsPanel } from "./ControlsPanel";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { useT } from "../i18n/i18n";
-import { safeAssetUrl } from "../lib/utils";
+import { safeAssetUrl, getFileName, logError } from "../lib/utils";
 
 interface AnimationResult {
   output_path: string;
@@ -26,6 +26,9 @@ export function AnimationTab() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnimationResult | null>(null);
   const [panelMode, setPanelMode] = useState<MaterialMode>("material");
+  // Cache-buster that changes each generation so the preview refreshes even
+  // when the GIF is rewritten to the same output path.
+  const bust = useMemo(() => Date.now(), [result]);
 
   const handleFilesSelected = useCallback((paths: string[]) => {
     setFrames((prev) => [...prev, ...paths]);
@@ -86,16 +89,12 @@ export function AnimationTab() {
         toast.error(t("toast.all_failed"));
       }
     } catch (err) {
+      logError("tab:animation:create_animation", err);
       toast.error(t("toast.operation_failed"));
     } finally {
       setLoading(false);
     }
   }, [frames, delayMs, loopCount, getOutputDir, t]);
-
-  const getFilename = (path: string) => {
-    const parts = path.replace(/\\/g, "/").split("/");
-    return parts[parts.length - 1] || path;
-  };
 
   const isEmpty = frames.length === 0;
   const hasResults = result !== null && result.frame_count > 0;
@@ -163,7 +162,7 @@ export function AnimationTab() {
                           (e.target as HTMLImageElement).style.display = "none";
                         }}
                       />
-                      <span className="flex-1 truncate">{getFilename(path)}</span>
+                      <span className="flex-1 truncate">{getFileName(path)}</span>
                       <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => moveFrame(index, -1)}
@@ -210,7 +209,7 @@ export function AnimationTab() {
                   style={{ borderRadius: 12, border: "1px solid var(--bg-border)", background: "var(--bg-base)" }}
                 >
                   <img
-                    src={safeAssetUrl(result.output_path, true)}
+                    src={safeAssetUrl(result.output_path, bust)}
                     alt="Generated GIF"
                     className="max-h-96 object-contain"
                   />

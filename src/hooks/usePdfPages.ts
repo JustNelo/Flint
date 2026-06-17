@@ -104,7 +104,7 @@ export function usePdfPages() {
       const imagePages: BuilderPage[] = imagePaths.map((path, index) => {
         const fileName = path.split(/[\\/]/).pop() || path;
         return {
-          id: `img_${Date.now()}_${index}_${fileName}`,
+          id: `img_${fileName}_${index}_${crypto.randomUUID()}`,
           sourcePath: path,
           pageNumber: 0,
           sourceType: "image" as const,
@@ -128,7 +128,7 @@ export function usePdfPages() {
           const placeholders: BuilderPage[] = [];
           for (let i = 1; i <= pageCount; i++) {
             placeholders.push({
-              id: `pdf_${fileName}_p${i}_${Date.now()}`,
+              id: `pdf_${fileName}_p${i}_${crypto.randomUUID()}`,
               sourcePath: pdfPath,
               pageNumber: i,
               sourceType: "pdf",

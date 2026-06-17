@@ -1,9 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { X, FolderOpen, RotateCcw, Globe, RefreshCw, Loader2, CheckCircle, AlertCircle } from "lucide-react";
-import { check } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
 import { useT, type Lang } from "../i18n/i18n";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { useAutoUpdate } from "../hooks/useAutoUpdate";
 import { GlassModal } from "./ui/GlassModal";
 
 interface SettingsPanelProps {
@@ -14,10 +13,10 @@ interface SettingsPanelProps {
 export function SettingsPanel({ onClose, onResetOnboarding }: SettingsPanelProps) {
   const { lang, setLang, t } = useT();
   const { workspace, selectWorkspace, openInExplorer } = useWorkspace();
+  const { checkNow, install } = useAutoUpdate();
   const [updateStatus, setUpdateStatus] = useState<
     "idle" | "checking" | "available" | "downloading" | "up-to-date" | "error"
   >("idle");
-  const [foundUpdate, setFoundUpdate] = useState<Awaited<ReturnType<typeof check>> | null>(null);
   const [foundVersion, setFoundVersion] = useState("");
   const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -31,10 +30,9 @@ export function SettingsPanel({ onClose, onResetOnboarding }: SettingsPanelProps
   const handleCheckUpdate = useCallback(async () => {
     setUpdateStatus("checking");
     try {
-      const update = await check();
-      if (update) {
-        setFoundUpdate(update);
-        setFoundVersion(update.version);
+      const { available, version } = await checkNow();
+      if (available) {
+        setFoundVersion(version);
         setUpdateStatus("available");
       } else {
         setUpdateStatus("up-to-date");
@@ -43,18 +41,16 @@ export function SettingsPanel({ onClose, onResetOnboarding }: SettingsPanelProps
     } catch {
       setUpdateStatus("error");
     }
-  }, []);
+  }, [checkNow]);
 
   const handleInstallUpdate = useCallback(async () => {
-    if (!foundUpdate) return;
     setUpdateStatus("downloading");
     try {
-      await foundUpdate.downloadAndInstall();
-      await relaunch();
+      await install();
     } catch {
       setUpdateStatus("error");
     }
-  }, [foundUpdate]);
+  }, [install]);
 
   return (
     <GlassModal>
@@ -180,7 +176,7 @@ export function SettingsPanel({ onClose, onResetOnboarding }: SettingsPanelProps
             }}
           >
             <span style={{ fontSize: "var(--text-sm)", color: "var(--text-primary)" }}>
-              {t("updater.new_version").replace("{version}", foundVersion)}
+              {t("updater.new_version", { version: foundVersion })}
             </span>
             <button onClick={handleInstallUpdate} className="btn-primary-sm">
               {t("updater.download")}

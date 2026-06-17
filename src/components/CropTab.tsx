@@ -1,18 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { Crop, RotateCcw } from "lucide-react";
-import { toast } from "sonner";
 import { DropZone } from "./DropZone";
 import { ImageGrid } from "./ImageGrid";
 import { ResultsBanner } from "./ResultsBanner";
 import { ActionButton } from "./ui/ActionButton";
 import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
 import { ControlsPanel } from "./ControlsPanel";
-import { useFileSelection } from "../hooks/useFileSelection";
-import { useWorkspace } from "../hooks/useWorkspace";
+import { useTabProcessor } from "../hooks/useTabProcessor";
 import { useT } from "../i18n/i18n";
 import { safeAssetUrl } from "../lib/utils";
-import type { BatchProgress, ProcessingResult } from "../types";
 
 /** Rectangle in normalised image coordinates (0–1) */
 interface Rect {
@@ -47,11 +43,18 @@ function clamp(v: number, lo: number, hi: number) {
 
 export function CropTab() {
   const { t } = useT();
-  const { files, addFiles, removeFile, clearFiles, reorderFiles } = useFileSelection();
-  const { getOutputDir } = useWorkspace();
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<ProcessingResult[]>([]);
-  const [lastOutputDir, setLastOutputDir] = useState("");
+  const {
+    files,
+    addFiles,
+    removeFile,
+    clearFiles,
+    reorderFiles,
+    loading,
+    results,
+    setResults,
+    lastOutputDir,
+    process,
+  } = useTabProcessor({ tabId: "crop", command: "crop_images" });
   const [panelMode, setPanelMode] = useState<MaterialMode>("material");
 
   const [naturalSize, setNaturalSize] = useState<{ w: number; h: number } | null>(null);
@@ -79,7 +82,7 @@ export function CropTab() {
       setNaturalSize(null);
       setPanelMode("material");
     },
-    [addFiles, clearFiles],
+    [addFiles, clearFiles, setResults],
   );
 
   const handleClearFiles = useCallback(() => {
@@ -88,7 +91,7 @@ export function CropTab() {
     setSel({ ...DEFAULT_RECT });
     setNaturalSize(null);
     setPanelMode("material");
-  }, [clearFiles]);
+  }, [clearFiles, setResults]);
 
   const handleImageLoad = useCallback(() => {
     const img = imgRef.current;
@@ -265,54 +268,28 @@ export function CropTab() {
       }
     : null;
 
+  // Show results after a run, fall back to material when the list is cleared.
+  // Guarded by !loading so an in-flight run (which clears results first) does not
+  // flash the material view before the new results arrive.
+  useEffect(() => {
+    if (!loading) setPanelMode(results.length > 0 ? "results" : "material");
+  }, [results, loading]);
+
   // ── Crop action ──────────────────────────────────────────────────────
   const handleCrop = useCallback(async () => {
-    if (files.length === 0) {
-      toast.error(t("toast.select_images"));
-      return;
-    }
-    if (!pixelRect || pixelRect.w === 0 || pixelRect.h === 0) {
-      toast.error(t("toast.draw_crop"));
-      return;
-    }
-    const outputDir = await getOutputDir("crop");
-    if (!outputDir) {
-      toast.error(t("toast.workspace_missing"));
-      return;
-    }
-
-    setLoading(true);
-    setResults([]);
-    setLastOutputDir(outputDir);
-
-    try {
-      const result = await invoke<BatchProgress>("crop_images", {
-        inputPaths: files,
+    if (!pixelRect) return;
+    await process({
+      extraParams: {
         ratio: "free",
         anchor: "top-left",
         width: pixelRect.w,
         height: pixelRect.h,
         cropX: pixelRect.x,
         cropY: pixelRect.y,
-        outputDir: outputDir,
-      });
-
-      setResults(result.results);
-      if (result.results.length > 0) setPanelMode("results");
-
-      if (result.completed === result.total) {
-        toast.success(t("toast.crop_success", { n: result.completed }));
-      } else if (result.completed > 0) {
-        toast.warning(t("toast.partial", { completed: result.completed, total: result.total }));
-      } else {
-        toast.error(t("toast.all_failed"));
-      }
-    } catch (err) {
-      toast.error(t("toast.operation_failed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [files, pixelRect, getOutputDir, t]);
+      },
+      successMessage: t("toast.crop_success", { n: files.length }),
+    });
+  }, [pixelRect, process, files.length, t]);
 
   const isEmpty = files.length === 0;
 

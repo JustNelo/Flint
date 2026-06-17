@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Zap } from "lucide-react";
 import { toast } from "sonner";
@@ -28,11 +28,14 @@ export function CompressTab() {
   const [lastOutputDir, setLastOutputDir] = useState("");
   const [panelMode, setPanelMode] = useState<MaterialMode>("material");
 
+  useEffect(() => {
+    if (!loading) setPanelMode(results.length > 0 ? "results" : "material");
+  }, [results, loading]);
+
   const handleFilesSelected = useCallback(
     (paths: string[]) => {
       addFiles(paths);
       setResults([]);
-      setPanelMode("material");
     },
     [addFiles],
   );
@@ -40,7 +43,6 @@ export function CompressTab() {
   const handleClearFiles = useCallback(() => {
     clearFiles();
     setResults([]);
-    setPanelMode("material");
   }, [clearFiles]);
 
   const handleCompress = useCallback(async () => {
@@ -67,7 +69,6 @@ export function CompressTab() {
       });
 
       setResults(result.results);
-      if (result.results.length > 0) setPanelMode("results");
 
       if (result.completed === result.total) {
         toast.success(t("toast.compress_success", { n: result.completed, format: format.toUpperCase() }));

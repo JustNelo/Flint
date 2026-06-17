@@ -24,11 +24,16 @@ export const ResultsBanner = memo(function ResultsBanner({ results, total, outpu
   const successResults = results.filter((r) => r.success);
 
   const sizeStats = useMemo(() => {
-    const totalInput = successResults.reduce((acc, r) => acc + r.input_size, 0);
-    const totalOutput = successResults.reduce((acc, r) => acc + r.output_size, 0);
+    const ok = results.filter((r) => r.success);
+    const totalInput = ok.reduce((acc, r) => acc + r.input_size, 0);
+    const totalOutput = ok.reduce((acc, r) => acc + r.output_size, 0);
     const saved = totalInput > 0 ? (1 - totalOutput / totalInput) * 100 : 0;
     return { totalInput, totalOutput, saved };
   }, [results]);
+
+  // Per-result cache-buster: changes once per new result set so re-runs that
+  // overwrite the same output path bypass the webview's stale image cache.
+  const bust = useMemo(() => Date.now(), [results]);
 
   // Bounded-size thumbnails for the output grid. `alwaysFresh` regenerates on
   // every new result set since a re-run can overwrite the same output path.
@@ -101,7 +106,7 @@ export const ResultsBanner = memo(function ResultsBanner({ results, total, outpu
               // Prefer the thumbnail; fall back to the original only when the
               // backend couldn't rasterize it (null); render a placeholder while
               // it is still being generated (undefined).
-              const previewSrc = thumb != null ? thumb : thumb === null ? safeAssetUrl(r.output_path, true) : undefined;
+              const previewSrc = thumb != null ? thumb : thumb === null ? safeAssetUrl(r.output_path, bust) : undefined;
               return (
                 <div
                   key={i}

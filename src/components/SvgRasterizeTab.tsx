@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { FileImage, FolderOpen } from "lucide-react";
 import { toast } from "sonner";
@@ -32,11 +32,14 @@ export function SvgRasterizeTab() {
   const [lastOutputDir, setLastOutputDir] = useState("");
   const [panelMode, setPanelMode] = useState<MaterialMode>("material");
 
+  useEffect(() => {
+    if (!loading) setPanelMode(result !== null ? "results" : "material");
+  }, [result, loading]);
+
   const handleFilesSelected = useCallback(
     (paths: string[]) => {
       addFiles(paths.slice(0, 1));
       setResult(null);
-      setPanelMode("material");
     },
     [addFiles],
   );
@@ -44,7 +47,6 @@ export function SvgRasterizeTab() {
   const handleClearFiles = useCallback(() => {
     clearFiles();
     setResult(null);
-    setPanelMode("material");
   }, [clearFiles]);
 
   const handleRasterize = useCallback(async () => {
@@ -71,7 +73,6 @@ export function SvgRasterizeTab() {
       });
 
       setResult(res);
-      setPanelMode("results");
       toast.success(t("toast.svg_rasterize_success", { w: res.width, h: res.height }));
     } catch (err) {
       toast.error(t("toast.operation_failed"));

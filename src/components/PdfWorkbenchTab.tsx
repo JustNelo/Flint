@@ -110,6 +110,7 @@ export function PdfWorkbenchTab() {
     loading,
     loadingThumbnails,
     result,
+    setResult,
     gridModified,
     pipelineStep,
     addFiles,
@@ -124,6 +125,12 @@ export function PdfWorkbenchTab() {
   // Mode: "workbench" (grid + actions) or "unlock" (standalone)
   const [mode, setMode] = useState<"workbench" | "unlock">("workbench");
   const [panelMode, setPanelMode] = useState<MaterialMode>("material");
+
+  const switchMode = (next: "workbench" | "unlock") => {
+    setMode(next);
+    setResult(null);
+    setPanelMode("material");
+  };
 
   useEffect(() => {
     if (!loading) setPanelMode(result ? "results" : "material");
@@ -500,13 +507,13 @@ export function PdfWorkbenchTab() {
       >
         <div className="flex gap-2">
           <button
-            onClick={() => setMode("workbench")}
+            onClick={() => switchMode("workbench")}
             className={cn("btn-toggle", mode === "workbench" && "btn-toggle-active")}
           >
             {t("pdf_tool.workbench_mode")}
           </button>
           <button
-            onClick={() => setMode("unlock")}
+            onClick={() => switchMode("unlock")}
             className={cn("btn-toggle", mode === "unlock" && "btn-toggle-active")}
           >
             <Unlock className="h-3.5 w-3.5" strokeWidth={1.5} />

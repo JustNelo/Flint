@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { Toaster } from "sonner";
 import {
@@ -112,25 +112,6 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
   },
 ];
 
-const TAB_DESC_KEYS: Record<TabId, string> = {
-  compress: "tab.compress.desc",
-  convert: "tab.convert.desc",
-  resize: "tab.resize.desc",
-  watermark: "tab.watermark.desc",
-  strip: "tab.strip.desc",
-  optimize: "tab.optimize.desc",
-  crop: "tab.crop.desc",
-  "pdf-toolkit": "tab.pdf_toolkit.desc",
-  palette: "tab.palette.desc",
-  favicon: "tab.favicon.desc",
-  animation: "tab.animation.desc",
-  spritesheet: "tab.spritesheet.desc",
-  base64: "tab.base64.desc",
-  qrcode: "tab.qrcode.desc",
-  "bulk-rename": "tab.bulk_rename.desc",
-  "svg-rasterize": "tab.svg_rasterize.desc",
-};
-
 // Tools migrated to the full-width Établi 2-pane layout (others use the centered column).
 const ETABLI_TOOLS = new Set<TabId>([
   "compress",
@@ -148,24 +129,32 @@ const ETABLI_TOOLS = new Set<TabId>([
   "pdf-toolkit",
 ]);
 
-const TAB_LABEL_KEYS: Record<TabId, string> = {
-  compress: "tab.compress",
-  convert: "tab.convert",
-  resize: "tab.resize",
-  watermark: "tab.watermark",
-  strip: "tab.strip",
-  optimize: "tab.optimize",
-  crop: "tab.crop",
-  "pdf-toolkit": "tab.pdf_toolkit",
-  palette: "tab.palette",
-  favicon: "tab.favicon",
-  animation: "tab.animation",
-  spritesheet: "tab.spritesheet",
-  base64: "tab.base64",
-  qrcode: "tab.qrcode",
-  "bulk-rename": "tab.bulk_rename",
-  "svg-rasterize": "tab.svg_rasterize",
-};
+const TAB_LABEL_KEYS = Object.fromEntries(
+  SIDEBAR_SECTIONS.flatMap((s) => s.tabs.map((t) => [t.id, t.labelKey])),
+) as Record<TabId, string>;
+const labelKeyFor = (id: TabId) => TAB_LABEL_KEYS[id];
+const descKeyFor = (id: TabId) => `${TAB_LABEL_KEYS[id]}.desc`;
+
+function ToolHeader({ title, description }: { title: string; description: string }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <h2
+        style={{
+          fontSize: "var(--text-xl)",
+          fontWeight: 600,
+          color: "var(--text-primary)",
+          letterSpacing: "-0.01em",
+          lineHeight: 1.3,
+        }}
+      >
+        {title}
+      </h2>
+      <p style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
+        {description}
+      </p>
+    </div>
+  );
+}
 
 function App() {
   const { t } = useT();
@@ -223,14 +212,8 @@ function App() {
 
   const activeExtensions = useMemo(() => TAB_EXTENSIONS[activeTab], [activeTab]);
 
-  const handleShortcutFiles = useCallback((paths: string[]) => {
-    // Dispatch a custom event that tab components can listen to
-    window.dispatchEvent(new CustomEvent("rustine-shortcut-files", { detail: paths }));
-  }, []);
-
   useGlobalShortcuts({
     acceptExtensions: activeExtensions,
-    onFilesSelected: handleShortcutFiles,
   });
 
   return (
@@ -251,22 +234,7 @@ function App() {
       >
         {ETABLI_TOOLS.has(activeTab) ? (
           <div>
-            <div style={{ marginBottom: 24 }}>
-              <h2
-                style={{
-                  fontSize: "var(--text-xl)",
-                  fontWeight: 600,
-                  color: "var(--text-primary)",
-                  letterSpacing: "-0.01em",
-                  lineHeight: 1.3,
-                }}
-              >
-                {t(TAB_LABEL_KEYS[activeTab])}
-              </h2>
-              <p style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
-                {t(TAB_DESC_KEYS[activeTab])}
-              </p>
-            </div>
+            <ToolHeader title={t(labelKeyFor(activeTab))} description={t(descKeyFor(activeTab))} />
             {activeTab === "compress" && <CompressTab />}
             {activeTab === "convert" && <ConvertTab />}
             {activeTab === "optimize" && <OptimizeTab />}
@@ -283,22 +251,7 @@ function App() {
           </div>
         ) : (
           <div className="mx-auto" style={{ maxWidth: 860 }}>
-            <div style={{ marginBottom: 24 }}>
-              <h2
-                style={{
-                  fontSize: "var(--text-xl)",
-                  fontWeight: 600,
-                  color: "var(--text-primary)",
-                  letterSpacing: "-0.01em",
-                  lineHeight: 1.3,
-                }}
-              >
-                {t(TAB_LABEL_KEYS[activeTab])}
-              </h2>
-              <p style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
-                {t(TAB_DESC_KEYS[activeTab])}
-              </p>
-            </div>
+            <ToolHeader title={t(labelKeyFor(activeTab))} description={t(descKeyFor(activeTab))} />
 
             {activeTab === "palette" && <PaletteTab />}
             {activeTab === "base64" && <Base64Tab />}

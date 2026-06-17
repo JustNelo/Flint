@@ -2,7 +2,7 @@ import { memo } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { X, ZoomIn, Info } from "lucide-react";
-import { safeAssetUrl } from "../lib/utils";
+import { resolveThumb } from "../lib/utils";
 
 interface ImageGridCardProps {
   id: string;
@@ -48,7 +48,7 @@ export const ImageGridCard = memo(
     // sources the backend couldn't rasterize (null, e.g. SVG). While pending
     // (undefined) we render a neutral placeholder rather than decoding the
     // full-resolution original.
-    const imgSrc = thumbnailSrc != null ? thumbnailSrc : thumbnailSrc === null ? safeAssetUrl(filePath) : undefined;
+    const imgSrc = resolveThumb(thumbnailSrc, filePath);
 
     return (
       <div

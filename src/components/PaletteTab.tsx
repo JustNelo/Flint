@@ -6,7 +6,7 @@ import { DropZone } from "./DropZone";
 import { ImageGrid } from "./ImageGrid";
 import { useFileSelection } from "../hooks/useFileSelection";
 import { useT } from "../i18n/i18n";
-import { safeAssetUrl, logError } from "../lib/utils";
+import { safeAssetUrl, logError, downloadText } from "../lib/utils";
 
 interface ColorInfo {
   hex: string;
@@ -106,7 +106,6 @@ export function PaletteTab() {
   const { files, addFiles, removeFile, clearFiles, reorderFiles } = useFileSelection();
   const [mode, setMode] = useState<PaletteMode>("palette");
   const [numColors, setNumColors] = useState(6);
-  const [, setLoading] = useState(false);
   const [palette, setPalette] = useState<ColorInfo[]>([]);
   const [pickedColor, setPickedColor] = useState<ColorInfo | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -184,7 +183,6 @@ export function PaletteTab() {
       return;
     }
     let cancelled = false;
-    setLoading(true);
     const id = setTimeout(() => {
       invoke<PaletteResult>("extract_palette", { imagePath: files[0], numColors })
         .then((result) => {
@@ -196,9 +194,6 @@ export function PaletteTab() {
             setPalette([]);
             toast.error(t("toast.operation_failed"));
           }
-        })
-        .finally(() => {
-          if (!cancelled) setLoading(false);
         });
     }, 200);
     return () => {
@@ -219,7 +214,6 @@ export function PaletteTab() {
   }, []);
 
   const copyAllHex = useCallback(async () => {
-    if (palette.length === 0) return;
     try {
       await navigator.clipboard.writeText(palette.map((c) => c.hex).join("\n"));
       toast.success(t("toast.copied"));
@@ -239,10 +233,14 @@ export function PaletteTab() {
     }
   }, [pickedColor, t]);
 
+  const exportColors = useMemo(
+    () => (palette.length > 0 ? palette : pickedColor ? [pickedColor] : []),
+    [palette, pickedColor],
+  );
+
   const exportJson = useCallback(() => {
-    const colors = palette.length > 0 ? palette : pickedColor ? [pickedColor] : [];
     const json = JSON.stringify(
-      colors.map((c) => ({
+      exportColors.map((c) => ({
         hex: c.hex,
         rgb: { r: c.r, g: c.g, b: c.b },
         hsl: rgbToHsl(c.r, c.g, c.b),
@@ -251,27 +249,14 @@ export function PaletteTab() {
       null,
       2,
     );
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "palette.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [palette, pickedColor]);
+    downloadText(json, "application/json", "palette.json");
+  }, [exportColors]);
 
   const exportCss = useCallback(() => {
-    const colors = palette.length > 0 ? palette : pickedColor ? [pickedColor] : [];
-    const lines = colors.map((c, i) => `  --color-${i + 1}: ${c.hex};`).join("\n");
+    const lines = exportColors.map((c, i) => `  --color-${i + 1}: ${c.hex};`).join("\n");
     const css = `:root {\n${lines}\n}`;
-    const blob = new Blob([css], { type: "text/css" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "palette.css";
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [palette, pickedColor]);
+    downloadText(css, "text/css", "palette.css");
+  }, [exportColors]);
 
   const PANEL: React.CSSProperties = {
     borderRadius: 12,
@@ -394,7 +379,7 @@ export function PaletteTab() {
                     <FileCode className="h-3.5 w-3.5" strokeWidth={1.5} />
                     {t("label.export_css")}
                   </button>
-                  <button onClick={copyAllHex} disabled={palette.length === 0} className="btn-ghost">
+                  <button onClick={copyAllHex} className="btn-ghost">
                     <Copy className="h-3.5 w-3.5" strokeWidth={1.5} />
                     {t("action.copy_all_hex")}
                   </button>

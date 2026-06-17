@@ -38,7 +38,7 @@ export function UpdateBanner({ status, version, onInstall, onDismiss }: UpdateBa
             ? t("updater.downloading")
             : status === "error"
               ? t("updater.error")
-              : t("updater.new_version").replace("{version}", version)}
+              : t("updater.new_version", { version })}
         </span>
       </div>
 

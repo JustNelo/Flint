@@ -1,9 +1,10 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Globe, CheckCircle, XCircle } from "lucide-react";
+import { Globe } from "lucide-react";
 import { toast } from "sonner";
 import { DropZone } from "./DropZone";
 import { ImageGrid } from "./ImageGrid";
+import { ResultCard } from "./ResultCard";
 import { ActionButton } from "./ui/ActionButton";
 import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
 import { ControlsPanel } from "./ControlsPanel";
@@ -25,11 +26,14 @@ export function FaviconTab() {
   const [result, setResult] = useState<FaviconResult | null>(null);
   const [panelMode, setPanelMode] = useState<MaterialMode>("material");
 
+  useEffect(() => {
+    if (!loading) setPanelMode(result !== null ? "results" : "material");
+  }, [result, loading]);
+
   const handleFilesSelected = useCallback(
     (paths: string[]) => {
       addFiles(paths.slice(0, 1));
       setResult(null);
-      setPanelMode("material");
     },
     [addFiles],
   );
@@ -37,7 +41,6 @@ export function FaviconTab() {
   const handleClearFiles = useCallback(() => {
     clearFiles();
     setResult(null);
-    setPanelMode("material");
   }, [clearFiles]);
 
   const handleGenerate = useCallback(async () => {
@@ -61,7 +64,6 @@ export function FaviconTab() {
       });
 
       setResult(res);
-      setPanelMode("results");
 
       if (res.generated_files.length > 0 && res.errors.length === 0) {
         toast.success(t("toast.favicon_success"));
@@ -104,41 +106,16 @@ export function FaviconTab() {
         }
         results={
           result && (
-            <div className="forge-card space-y-3">
-              <div className="flex items-center gap-2">
-                {result.errors.length === 0 ? (
-                  <CheckCircle className="h-4 w-4" style={{ color: "var(--success)" }} strokeWidth={1.5} />
-                ) : (
-                  <XCircle className="h-4 w-4" style={{ color: "var(--warning)" }} strokeWidth={1.5} />
-                )}
-                <span style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}>
-                  {t("result.favicons_generated")}
+            <ResultCard
+              success={result.errors.length === 0}
+              title={t("result.favicons_generated")}
+              chips={result.generated_files.map((file) => (
+                <span key={file} className="forge-chip">
+                  {file}
                 </span>
-              </div>
-
-              <div className="flex flex-wrap gap-1.5">
-                {result.generated_files.map((file) => (
-                  <span key={file} className="forge-chip">
-                    {file}
-                  </span>
-                ))}
-              </div>
-
-              {result.errors.length > 0 && (
-                <div className="max-h-24 overflow-y-auto space-y-1">
-                  {result.errors.map((err, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-2"
-                      style={{ fontSize: "var(--text-sm)", color: "rgba(239,68,68,0.8)" }}
-                    >
-                      <XCircle className="h-3 w-3 shrink-0 mt-0.5" strokeWidth={1.5} />
-                      <span>{err}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+              ))}
+              errors={result.errors}
+            />
           )
         }
       />

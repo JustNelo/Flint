@@ -1,7 +1,5 @@
-import { useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useState, useCallback, useEffect } from "react";
 import { Scaling } from "lucide-react";
-import { toast } from "sonner";
 import { DropZone } from "./DropZone";
 import { ImageGrid } from "./ImageGrid";
 import { ResultsBanner } from "./ResultsBanner";
@@ -9,10 +7,9 @@ import { ActionButton } from "./ui/ActionButton";
 import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
 import { ControlsPanel } from "./ControlsPanel";
 import { Slider } from "./ui/Slider";
-import { useFileSelection } from "../hooks/useFileSelection";
-import { useWorkspace } from "../hooks/useWorkspace";
+import { useTabProcessor } from "../hooks/useTabProcessor";
 import { useT } from "../i18n/i18n";
-import type { BatchProgress, ProcessingResult, ResizeMode } from "../types";
+import type { ResizeMode } from "../types";
 
 const MODE_KEYS: { value: ResizeMode; labelKey: string }[] = [
   { value: "percentage", labelKey: "label.percentage" },
@@ -32,73 +29,36 @@ const PRESETS: { labelKey: string; w: number; h: number }[] = [
 
 export function ResizeTab() {
   const { t } = useT();
-  const { files, addFiles, removeFile, clearFiles, reorderFiles } = useFileSelection();
-  const { getOutputDir } = useWorkspace();
+  const {
+    files,
+    removeFile,
+    reorderFiles,
+    handleFilesSelected,
+    handleClearFiles,
+    loading,
+    results,
+    lastOutputDir,
+    process,
+  } = useTabProcessor({ tabId: "resize", command: "resize_images" });
   const [mode, setMode] = useState<ResizeMode>("percentage");
   const [width, setWidth] = useState(800);
   const [height, setHeight] = useState(600);
   const [percentage, setPercentage] = useState(50);
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<ProcessingResult[]>([]);
-  const [lastOutputDir, setLastOutputDir] = useState("");
   const [panelMode, setPanelMode] = useState<MaterialMode>("material");
 
-  const handleFilesSelected = useCallback(
-    (paths: string[]) => {
-      addFiles(paths);
-      setResults([]);
-      setPanelMode("material");
-    },
-    [addFiles],
-  );
-
-  const handleClearFiles = useCallback(() => {
-    clearFiles();
-    setResults([]);
-    setPanelMode("material");
-  }, [clearFiles]);
+  // Show results after a run, fall back to material when the list is cleared.
+  // Guarded by !loading so an in-flight run (which clears results first) does not
+  // flash the material view before the new results arrive.
+  useEffect(() => {
+    if (!loading) setPanelMode(results.length > 0 ? "results" : "material");
+  }, [results, loading]);
 
   const handleResize = useCallback(async () => {
-    if (files.length === 0) {
-      toast.error(t("toast.select_images"));
-      return;
-    }
-    const outputDir = await getOutputDir("resize");
-    if (!outputDir) {
-      toast.error(t("toast.workspace_missing"));
-      return;
-    }
-
-    setLoading(true);
-    setResults([]);
-    setLastOutputDir(outputDir);
-
-    try {
-      const result = await invoke<BatchProgress>("resize_images", {
-        inputPaths: files,
-        mode,
-        width,
-        height,
-        percentage,
-        outputDir,
-      });
-
-      setResults(result.results);
-      if (result.results.length > 0) setPanelMode("results");
-
-      if (result.completed === result.total) {
-        toast.success(t("toast.resize_success", { n: result.completed }));
-      } else if (result.completed > 0) {
-        toast.warning(t("toast.partial", { completed: result.completed, total: result.total }));
-      } else {
-        toast.error(t("toast.all_failed"));
-      }
-    } catch (err) {
-      toast.error(t("toast.operation_failed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [files, mode, width, height, percentage, getOutputDir, t]);
+    await process({
+      extraParams: { mode, width, height, percentage },
+      successMessage: t("toast.resize_success", { n: files.length }),
+    });
+  }, [process, mode, width, height, percentage, files.length, t]);
 
   const isEmpty = files.length === 0;
 

@@ -1,9 +1,10 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { LayoutGrid, CheckCircle, XCircle } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 import { DropZone } from "./DropZone";
 import { ImageGrid } from "./ImageGrid";
+import { ResultCard } from "./ResultCard";
 import { ActionButton } from "./ui/ActionButton";
 import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
 import { ControlsPanel } from "./ControlsPanel";
@@ -30,11 +31,16 @@ export function SpriteSheetTab() {
   const [result, setResult] = useState<SpriteSheetResult | null>(null);
   const [panelMode, setPanelMode] = useState<MaterialMode>("material");
 
+  const hasResults = result !== null && result.sprite_count > 0;
+
+  useEffect(() => {
+    if (!loading) setPanelMode(hasResults ? "results" : "material");
+  }, [hasResults, loading]);
+
   const handleFilesSelected = useCallback(
     (paths: string[]) => {
       addFiles(paths);
       setResult(null);
-      setPanelMode("material");
     },
     [addFiles],
   );
@@ -42,7 +48,6 @@ export function SpriteSheetTab() {
   const handleClearFiles = useCallback(() => {
     clearFiles();
     setResult(null);
-    setPanelMode("material");
   }, [clearFiles]);
 
   const handleGenerate = useCallback(async () => {
@@ -68,7 +73,6 @@ export function SpriteSheetTab() {
       });
 
       setResult(res);
-      if (res.sprite_count > 0) setPanelMode("results");
 
       if (res.sprite_count > 0 && res.errors.length === 0) {
         toast.success(t("toast.spritesheet_success", { n: res.sprite_count }));
@@ -85,7 +89,6 @@ export function SpriteSheetTab() {
   }, [files, columns, padding, getOutputDir, t]);
 
   const isEmpty = files.length === 0;
-  const hasResults = result !== null && result.sprite_count > 0;
 
   return (
     <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
@@ -107,42 +110,21 @@ export function SpriteSheetTab() {
         }
         results={
           hasResults && (
-            <div className="forge-card space-y-3">
-              <div className="flex items-center gap-2">
-                {result.errors.length === 0 ? (
-                  <CheckCircle className="h-4 w-4" style={{ color: "var(--success)" }} strokeWidth={1.5} />
-                ) : (
-                  <XCircle className="h-4 w-4" style={{ color: "var(--warning)" }} strokeWidth={1.5} />
-                )}
-                <span style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}>
-                  {t("result.spritesheet_created", {
-                    n: result.sprite_count,
-                    w: result.sheet_width,
-                    h: result.sheet_height,
-                  })}
-                </span>
-              </div>
-
-              <div className="flex flex-wrap gap-1.5">
-                <span className="forge-chip">spritesheet.png</span>
-                <span className="forge-chip">spritesheet.json</span>
-              </div>
-
-              {result.errors.length > 0 && (
-                <div className="max-h-24 overflow-y-auto space-y-1">
-                  {result.errors.map((err, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-2"
-                      style={{ fontSize: "var(--text-sm)", color: "rgba(239,68,68,0.8)" }}
-                    >
-                      <XCircle className="h-3 w-3 shrink-0 mt-0.5" strokeWidth={1.5} />
-                      <span>{err}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <ResultCard
+              success={result.errors.length === 0}
+              title={t("result.spritesheet_created", {
+                n: result.sprite_count,
+                w: result.sheet_width,
+                h: result.sheet_height,
+              })}
+              chips={
+                <>
+                  <span className="forge-chip">spritesheet.png</span>
+                  <span className="forge-chip">spritesheet.json</span>
+                </>
+              }
+              errors={result.errors}
+            />
           )
         }
       />

@@ -4,10 +4,8 @@ import { toast } from "sonner";
 import { logError } from "../lib/utils";
 import { useT } from "../i18n/i18n";
 import { usePdfPages, type BuilderPage } from "./usePdfPages";
-import { usePdfMaterializer } from "./usePdfMaterializer";
+import { usePdfMaterializer, buildMergeArgs } from "./usePdfMaterializer";
 import type {
-  PdfBuilderItem,
-  MergePdfOptions,
   MergePdfResult,
   PdfExtractionResult,
   PdfWatermarkResult,
@@ -200,19 +198,7 @@ export function usePdfWorkbench() {
             ? `${outputDir}${sep}_rustine_temp_build_${Date.now()}.pdf`
             : directPath;
 
-          const items: PdfBuilderItem[] = currentPages.map((page) => ({
-            source_path: page.sourcePath,
-            page_number: page.sourceType === "pdf" ? page.pageNumber : null,
-            source_type: page.sourceType,
-          }));
-
-          const options: MergePdfOptions = {
-            page_format: "fit",
-            orientation: "portrait",
-            margin_px: 0,
-            image_quality: 90,
-            output_path: buildPath,
-          };
+          const { items, options } = buildMergeArgs(currentPages, buildPath);
 
           const buildRes = await invoke<MergePdfResult>("merge_to_pdf", { items, options });
           if (buildRes.page_count === 0) {
@@ -546,6 +532,7 @@ export function usePdfWorkbench() {
     loading,
     loadingThumbnails: pageState.loadingThumbnails,
     result,
+    setResult,
     gridModified,
     pipelineStep,
     addFiles,

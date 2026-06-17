@@ -1,5 +1,4 @@
-import { useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useState, useCallback, useEffect } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Stamp, Type, ImageIcon, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -10,11 +9,10 @@ import { ActionButton } from "./ui/ActionButton";
 import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
 import { ControlsPanel } from "./ControlsPanel";
 import { Slider } from "./ui/Slider";
-import { useFileSelection } from "../hooks/useFileSelection";
-import { useWorkspace } from "../hooks/useWorkspace";
+import { useTabProcessor } from "../hooks/useTabProcessor";
 import { useT } from "../i18n/i18n";
-import { cn, safeAssetUrl } from "../lib/utils";
-import type { BatchProgress, ProcessingResult, WatermarkPosition } from "../types";
+import { cn, safeAssetUrl, getFileName } from "../lib/utils";
+import type { WatermarkPosition } from "../types";
 
 type WatermarkMode = "text" | "image";
 
@@ -29,9 +27,21 @@ const POSITION_KEYS: { value: WatermarkPosition; labelKey: string }[] = [
 
 export function WatermarkTab() {
   const { t } = useT();
-  const { files, addFiles, removeFile, clearFiles, reorderFiles } = useFileSelection();
-  const { getOutputDir } = useWorkspace();
   const [mode, setMode] = useState<WatermarkMode>("text");
+  const {
+    files,
+    removeFile,
+    reorderFiles,
+    handleFilesSelected,
+    handleClearFiles,
+    loading,
+    results,
+    lastOutputDir,
+    process,
+  } = useTabProcessor({
+    tabId: "watermark",
+    command: mode === "text" ? "add_watermark" : "add_image_watermark",
+  });
   const [text, setText] = useState("");
   const [position, setPosition] = useState<WatermarkPosition>("center");
   const [opacity, setOpacity] = useState(30);
@@ -39,25 +49,14 @@ export function WatermarkTab() {
   const [textColor, setTextColor] = useState("#B3B3B3");
   const [logoPath, setLogoPath] = useState<string | null>(null);
   const [logoScale, setLogoScale] = useState(25);
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<ProcessingResult[]>([]);
-  const [lastOutputDir, setLastOutputDir] = useState("");
   const [panelMode, setPanelMode] = useState<MaterialMode>("material");
 
-  const handleFilesSelected = useCallback(
-    (paths: string[]) => {
-      addFiles(paths);
-      setResults([]);
-      setPanelMode("material");
-    },
-    [addFiles],
-  );
-
-  const handleClearFiles = useCallback(() => {
-    clearFiles();
-    setResults([]);
-    setPanelMode("material");
-  }, [clearFiles]);
+  // Show results after a run, fall back to material when the list is cleared.
+  // Guarded by !loading so an in-flight run (which clears results first) does not
+  // flash the material view before the new results arrive.
+  useEffect(() => {
+    if (!loading) setPanelMode(results.length > 0 ? "results" : "material");
+  }, [results, loading]);
 
   const handleSelectLogo = useCallback(async () => {
     try {
@@ -76,10 +75,6 @@ export function WatermarkTab() {
   const canExecute = mode === "text" ? files.length > 0 && !!text.trim() : files.length > 0 && !!logoPath;
 
   const handleWatermark = useCallback(async () => {
-    if (files.length === 0) {
-      toast.error(t("toast.select_images"));
-      return;
-    }
     if (mode === "text" && !text.trim()) {
       toast.error(t("toast.watermark_text_missing"));
       return;
@@ -88,56 +83,28 @@ export function WatermarkTab() {
       toast.error(t("toast.watermark_image_missing"));
       return;
     }
-    const outputDir = await getOutputDir("watermark");
-    if (!outputDir) {
-      toast.error(t("toast.workspace_missing"));
-      return;
-    }
 
-    setLoading(true);
-    setResults([]);
-    setLastOutputDir(outputDir);
+    const extraParams =
+      mode === "text"
+        ? {
+            text: text.trim(),
+            position,
+            opacity: opacity / 100,
+            fontSize,
+            color: textColor,
+          }
+        : {
+            watermarkPath: logoPath,
+            position,
+            opacity: opacity / 100,
+            scale: logoScale / 100,
+          };
 
-    try {
-      let result: BatchProgress;
-
-      if (mode === "text") {
-        result = await invoke<BatchProgress>("add_watermark", {
-          inputPaths: files,
-          text: text.trim(),
-          position,
-          opacity: opacity / 100,
-          fontSize: fontSize,
-          color: textColor,
-          outputDir,
-        });
-      } else {
-        result = await invoke<BatchProgress>("add_image_watermark", {
-          inputPaths: files,
-          watermarkPath: logoPath,
-          position,
-          opacity: opacity / 100,
-          scale: logoScale / 100,
-          outputDir,
-        });
-      }
-
-      setResults(result.results);
-      if (result.results.length > 0) setPanelMode("results");
-
-      if (result.completed === result.total) {
-        toast.success(t("toast.watermark_success", { n: result.completed }));
-      } else if (result.completed > 0) {
-        toast.warning(t("toast.partial", { completed: result.completed, total: result.total }));
-      } else {
-        toast.error(t("toast.all_failed"));
-      }
-    } catch (err) {
-      toast.error(t("toast.operation_failed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [files, mode, text, logoPath, position, opacity, fontSize, textColor, logoScale, getOutputDir, t]);
+    await process({
+      extraParams,
+      successMessage: t("toast.watermark_success", { n: files.length }),
+    });
+  }, [process, mode, text, logoPath, position, opacity, fontSize, textColor, logoScale, files.length, t]);
 
   const isEmpty = files.length === 0;
 
@@ -262,7 +229,7 @@ export function WatermarkTab() {
                   }}
                 >
                   <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />
-                  {logoPath ? logoPath.split(/[\\/]/).pop() : t("label.select_logo")}
+                  {logoPath ? getFileName(logoPath) : t("label.select_logo")}
                 </button>
                 {logoPath && (
                   <div
@@ -275,7 +242,7 @@ export function WatermarkTab() {
                       className="h-8 w-8 rounded object-contain"
                       style={{ background: "var(--bg-elevated)" }}
                     />
-                    <span className="truncate flex-1 forge-hint">{logoPath.split(/[\\/]/).pop()}</span>
+                    <span className="truncate flex-1 forge-hint">{getFileName(logoPath)}</span>
                   </div>
                 )}
               </div>

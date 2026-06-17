@@ -9,6 +9,7 @@ import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
 import { ControlsPanel } from "./ControlsPanel";
 import { useFileSelection } from "../hooks/useFileSelection";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { getFileName, logError } from "../lib/utils";
 import { useT } from "../i18n/i18n";
 
 interface RenameEntry {
@@ -53,8 +54,7 @@ export function BulkRenameTab() {
   const previewNames = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     return files.slice(0, 5).map((file, i) => {
-      const parts = file.replace(/\\/g, "/").split("/");
-      const fullName = parts[parts.length - 1] || file;
+      const fullName = getFileName(file);
       const dotIdx = fullName.lastIndexOf(".");
       const stem = dotIdx > 0 ? fullName.slice(0, dotIdx) : fullName;
       const ext = dotIdx > 0 ? fullName.slice(dotIdx + 1) : "";
@@ -107,6 +107,7 @@ export function BulkRenameTab() {
         toast.error(t("toast.all_failed"));
       }
     } catch (err) {
+      logError("tab:bulk-rename:bulk_rename", err);
       toast.error(t("toast.operation_failed"));
     } finally {
       setLoading(false);
