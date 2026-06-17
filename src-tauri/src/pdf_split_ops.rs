@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use crate::progress::emit_progress_simple;
-use crate::utils::{ensure_output_dir, file_stem};
+use crate::utils::{deep_clone_object, ensure_output_dir, file_stem};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PdfSplitResult {
@@ -74,63 +74,6 @@ fn parse_ranges(ranges_str: &str, total_pages: u32) -> Result<Vec<(u32, u32)>, S
     Ok(result)
 }
 
-/// Recursively copy an object (and everything it references) from `source` into
-/// `dest`, returning the new ObjectId in `dest`. Already-copied objects are
-/// tracked in `id_map` to avoid duplicates and infinite loops.
-fn copy_object_deep(
-    source: &LopdfDocument,
-    dest: &mut LopdfDocument,
-    obj_id: ObjectId,
-    id_map: &mut HashMap<ObjectId, ObjectId>,
-) -> ObjectId {
-    if let Some(&mapped) = id_map.get(&obj_id) {
-        return mapped;
-    }
-
-    let new_id = dest.new_object_id();
-    id_map.insert(obj_id, new_id);
-
-    if let Ok(obj) = source.get_object(obj_id) {
-        let cloned = remap_object(source, dest, obj.clone(), id_map);
-        dest.objects.insert(new_id, cloned);
-    }
-
-    new_id
-}
-
-/// Walk an Object tree, remapping every Reference to a newly-copied id.
-fn remap_object(
-    source: &LopdfDocument,
-    dest: &mut LopdfDocument,
-    obj: Object,
-    id_map: &mut HashMap<ObjectId, ObjectId>,
-) -> Object {
-    match obj {
-        Object::Reference(id) => Object::Reference(copy_object_deep(source, dest, id, id_map)),
-        Object::Array(arr) => Object::Array(
-            arr.into_iter()
-                .map(|o| remap_object(source, dest, o, id_map))
-                .collect(),
-        ),
-        Object::Dictionary(dict) => {
-            let mut new_dict = lopdf::Dictionary::new();
-            for (key, val) in dict.into_iter() {
-                new_dict.set(key, remap_object(source, dest, val, id_map));
-            }
-            Object::Dictionary(new_dict)
-        }
-        Object::Stream(stream) => {
-            let new_dict = match remap_object(source, dest, Object::Dictionary(stream.dict), id_map)
-            {
-                Object::Dictionary(d) => d,
-                _ => lopdf::Dictionary::new(),
-            };
-            Object::Stream(lopdf::Stream::new(new_dict, stream.content))
-        }
-        other => other,
-    }
-}
-
 pub fn split_pdf(
     pdf_path: &str,
     ranges_str: &str,
@@ -182,20 +125,32 @@ pub fn split_pdf(
         let mut page_refs: Vec<Object> = Vec::new();
         let mut id_map: HashMap<ObjectId, ObjectId> = HashMap::new();
 
+        let mut range_error: Option<String> = None;
         for page_num in *start..=*end {
             if let Some(&page_obj_id) = source_pages.get(&page_num) {
                 let new_page_id =
-                    copy_object_deep(&source_doc, &mut new_doc, page_obj_id, &mut id_map);
+                    match deep_clone_object(&mut new_doc, &source_doc, page_obj_id, &mut id_map) {
+                        Ok(id) => id,
+                        Err(e) => {
+                            range_error =
+                                Some(format!("Range {}-{}: page {}: {}", start, end, page_num, e));
+                            break;
+                        }
+                    };
 
                 // Point the copied page's Parent to our new Pages node
-                if let Some(Object::Dictionary(ref mut dict)) =
-                    new_doc.objects.get_mut(&new_page_id)
-                {
+                if let Ok(Object::Dictionary(ref mut dict)) = new_doc.get_object_mut(new_page_id) {
                     dict.set("Parent", Object::Reference(pages_id));
                 }
 
                 page_refs.push(Object::Reference(new_page_id));
             }
+        }
+
+        if let Some(e) = range_error {
+            result.errors.push(e);
+            emit_progress_simple(app_handle, idx + 1, total_ranges, pdf_path);
+            continue;
         }
 
         let page_count = page_refs.len() as i64;

@@ -769,11 +769,6 @@ fn cancel_processing(token: tauri::State<'_, CancellationToken>) {
     (*token).0.store(true, Ordering::Relaxed);
 }
 
-#[tauri::command]
-fn reset_cancel(token: tauri::State<'_, CancellationToken>) {
-    (*token).0.store(false, Ordering::Relaxed);
-}
-
 /// Upper bound on file size accepted by `image_to_base64`.
 /// Encoding inflates by ~4/3, then crosses the IPC layer as a UTF-8 string —
 /// values above this risk OOM and UI freezes. For preview/display, prefer
@@ -857,8 +852,7 @@ pub fn run() {
             generate_qr_preview,
             bulk_rename_cmd,
             rasterize_svg_cmd,
-            cancel_processing,
-            reset_cancel
+            cancel_processing
         ])
         .setup(|app| {
             let png_bytes = include_bytes!("../icons/icon.png");

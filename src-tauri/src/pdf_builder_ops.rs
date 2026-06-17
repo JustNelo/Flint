@@ -1,5 +1,5 @@
 use image::codecs::jpeg::JpegEncoder;
-use lopdf::{dictionary, Document as LopdfDocument, Object, Stream};
+use lopdf::{dictionary, Document as LopdfDocument, Object};
 use pdfium_render::prelude::*;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -8,7 +8,9 @@ use std::io::Cursor;
 use std::path::Path;
 
 use crate::progress::emit_progress_simple;
-use crate::utils::{embed_image_as_pdf_page, ensure_output_dir, filename_or_default};
+use crate::utils::{
+    deep_clone_object, embed_image_as_pdf_page, ensure_output_dir, filename_or_default,
+};
 
 // --- Structs ---
 
@@ -249,12 +251,11 @@ fn add_image_page(
     image_path: &str,
     options: &MergePdfOptions,
 ) -> Result<lopdf::ObjectId, String> {
-    let img = image::open(image_path)
-        .map_err(|e| format!("Cannot open image '{}': {}", image_path, e))?;
-    let (img_w, img_h) = (img.width(), img.height());
-    drop(img);
-
     let (page_w, page_h) = if options.page_format == "fit" {
+        // Only the dimensions are needed here; let embed_image_as_pdf_page own
+        // the single full decode used for embedding.
+        let (img_w, img_h) = image::image_dimensions(image_path)
+            .map_err(|e| format!("Cannot read image dimensions '{}': {}", image_path, e))?;
         (img_w as f32, img_h as f32)
     } else {
         get_page_dimensions(&options.page_format, &options.orientation)
@@ -302,73 +303,6 @@ fn copy_pdf_page_from_loaded(
     }
 
     Ok(cloned_page_id)
-}
-
-fn deep_clone_object(
-    dest: &mut LopdfDocument,
-    source: &LopdfDocument,
-    obj_id: lopdf::ObjectId,
-    visited: &mut HashMap<lopdf::ObjectId, lopdf::ObjectId>,
-) -> Result<lopdf::ObjectId, String> {
-    // Return cached ID if we already cloned this object (cycle breaker)
-    if let Some(&existing_id) = visited.get(&obj_id) {
-        return Ok(existing_id);
-    }
-
-    let obj = source
-        .get_object(obj_id)
-        .map_err(|e| format!("Cannot get object {:?}: {}", obj_id, e))?
-        .clone();
-
-    // Reserve an ID upfront so recursive calls can reference it
-    let new_id = dest.add_object(Object::Null);
-    visited.insert(obj_id, new_id);
-
-    let cloned = clone_object_recursive(dest, source, &obj, visited)?;
-    dest.objects.insert(new_id, cloned);
-
-    Ok(new_id)
-}
-
-fn clone_object_recursive(
-    dest: &mut LopdfDocument,
-    source: &LopdfDocument,
-    obj: &Object,
-    visited: &mut HashMap<lopdf::ObjectId, lopdf::ObjectId>,
-) -> Result<Object, String> {
-    match obj {
-        Object::Reference(ref_id) => {
-            // Recursively clone the referenced object (visited map prevents cycles)
-            let new_id = deep_clone_object(dest, source, *ref_id, visited)?;
-            Ok(Object::Reference(new_id))
-        }
-        Object::Dictionary(dict) => {
-            let mut new_dict = lopdf::Dictionary::new();
-            for (key, value) in dict.iter() {
-                let cloned_value = clone_object_recursive(dest, source, value, visited)?;
-                new_dict.set(key.clone(), cloned_value);
-            }
-            Ok(Object::Dictionary(new_dict))
-        }
-        Object::Array(arr) => {
-            let mut new_arr = Vec::with_capacity(arr.len());
-            for item in arr {
-                new_arr.push(clone_object_recursive(dest, source, item, visited)?);
-            }
-            Ok(Object::Array(new_arr))
-        }
-        Object::Stream(stream) => {
-            let mut new_dict = lopdf::Dictionary::new();
-            for (key, value) in stream.dict.iter() {
-                let cloned_value = clone_object_recursive(dest, source, value, visited)?;
-                new_dict.set(key.clone(), cloned_value);
-            }
-            let new_stream = Stream::new(new_dict, stream.content.clone());
-            Ok(Object::Stream(new_stream))
-        }
-        // Primitive types: clone directly
-        other => Ok(other.clone()),
-    }
 }
 
 pub fn merge_to_pdf(

@@ -55,13 +55,6 @@ const EXIF_TAGS: &[(Tag, &str)] = &[
 ];
 
 pub fn read_image_metadata(path: &str) -> Result<ImageMetadata, String> {
-    let reader = image::ImageReader::open(path).map_err(|e| format!("Cannot open file: {}", e))?;
-
-    // Read dimensions from header only — avoids decoding the full image
-    let (width, height) = reader
-        .into_dimensions()
-        .map_err(|e| format!("Cannot read image dimensions: {}", e))?;
-
     let ext = Path::new(path)
         .extension()
         .and_then(|e| e.to_str())
@@ -70,29 +63,31 @@ pub fn read_image_metadata(path: &str) -> Result<ImageMetadata, String> {
 
     let size = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
 
-    // Extract color type and bit depth from the decoder header — avoids full pixel decode
-    let (bit_depth, color_type) = match image::ImageReader::open(path)
+    // Build a single decoder from the header and read both dimensions and color
+    // type from it — avoids re-opening the file just for one piece of metadata.
+    let decoder = image::ImageReader::open(path)
         .and_then(|r| r.with_guessed_format())
-        .and_then(|r| r.into_decoder().map_err(std::io::Error::other))
-    {
-        Ok(decoder) => {
-            let ct = match decoder.color_type() {
-                image::ColorType::L8 => ("8", "Grayscale"),
-                image::ColorType::La8 => ("8", "Grayscale+Alpha"),
-                image::ColorType::Rgb8 => ("8", "RGB"),
-                image::ColorType::Rgba8 => ("8", "RGBA"),
-                image::ColorType::L16 => ("16", "Grayscale"),
-                image::ColorType::La16 => ("16", "Grayscale+Alpha"),
-                image::ColorType::Rgb16 => ("16", "RGB"),
-                image::ColorType::Rgba16 => ("16", "RGBA"),
-                image::ColorType::Rgb32F => ("32", "RGB Float"),
-                image::ColorType::Rgba32F => ("32", "RGBA Float"),
-                _ => ("?", "Unknown"),
-            };
-            (Some(ct.0.to_string()), Some(ct.1.to_string()))
-        }
-        Err(_) => (None, None),
+        .map_err(|e| format!("Cannot open file: {}", e))?
+        .into_decoder()
+        .map_err(|e| format!("Cannot read image: {}", e))?;
+
+    let (width, height) = decoder.dimensions();
+
+    let ct = match decoder.color_type() {
+        image::ColorType::L8 => ("8", "Grayscale"),
+        image::ColorType::La8 => ("8", "Grayscale+Alpha"),
+        image::ColorType::Rgb8 => ("8", "RGB"),
+        image::ColorType::Rgba8 => ("8", "RGBA"),
+        image::ColorType::L16 => ("16", "Grayscale"),
+        image::ColorType::La16 => ("16", "Grayscale+Alpha"),
+        image::ColorType::Rgb16 => ("16", "RGB"),
+        image::ColorType::Rgba16 => ("16", "RGBA"),
+        image::ColorType::Rgb32F => ("32", "RGB Float"),
+        image::ColorType::Rgba32F => ("32", "RGBA Float"),
+        _ => ("?", "Unknown"),
     };
+    let bit_depth = Some(ct.0.to_string());
+    let color_type = Some(ct.1.to_string());
 
     // Extract DPI from EXIF resolution tags
     let mut dpi: Option<(u32, u32)> = None;

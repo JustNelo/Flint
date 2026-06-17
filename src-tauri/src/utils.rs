@@ -1,6 +1,7 @@
 use image::codecs::jpeg::JpegEncoder;
 use lopdf::content::{Content, Operation};
 use lopdf::{dictionary, Document as LopdfDocument, Object, Stream};
+use std::collections::HashMap;
 use std::fs;
 use std::io::Cursor;
 use std::path::Path;
@@ -137,6 +138,79 @@ pub fn embed_image_as_pdf_page(
     };
 
     Ok(doc.add_object(page))
+}
+
+/// Recursively copy an object (and everything it references) from `source` into
+/// `dest`, returning the new ObjectId in `dest`. Already-cloned objects are
+/// tracked in `visited` to avoid duplicates and break reference cycles. Errors
+/// from the source document are propagated so callers don't emit dangling
+/// references.
+pub fn deep_clone_object(
+    dest: &mut LopdfDocument,
+    source: &LopdfDocument,
+    obj_id: lopdf::ObjectId,
+    visited: &mut HashMap<lopdf::ObjectId, lopdf::ObjectId>,
+) -> Result<lopdf::ObjectId, String> {
+    // Return cached ID if we already cloned this object (cycle breaker)
+    if let Some(&existing_id) = visited.get(&obj_id) {
+        return Ok(existing_id);
+    }
+
+    let obj = source
+        .get_object(obj_id)
+        .map_err(|e| format!("Cannot get object {:?}: {}", obj_id, e))?
+        .clone();
+
+    // Reserve an ID upfront so recursive calls can reference it
+    let new_id = dest.add_object(Object::Null);
+    visited.insert(obj_id, new_id);
+
+    let cloned = clone_object_recursive(dest, source, &obj, visited)?;
+    dest.objects.insert(new_id, cloned);
+
+    Ok(new_id)
+}
+
+/// Walk an Object tree, remapping every Reference to a newly-cloned id in `dest`.
+fn clone_object_recursive(
+    dest: &mut LopdfDocument,
+    source: &LopdfDocument,
+    obj: &Object,
+    visited: &mut HashMap<lopdf::ObjectId, lopdf::ObjectId>,
+) -> Result<Object, String> {
+    match obj {
+        Object::Reference(ref_id) => {
+            // Recursively clone the referenced object (visited map prevents cycles)
+            let new_id = deep_clone_object(dest, source, *ref_id, visited)?;
+            Ok(Object::Reference(new_id))
+        }
+        Object::Dictionary(dict) => {
+            let mut new_dict = lopdf::Dictionary::new();
+            for (key, value) in dict.iter() {
+                let cloned_value = clone_object_recursive(dest, source, value, visited)?;
+                new_dict.set(key.clone(), cloned_value);
+            }
+            Ok(Object::Dictionary(new_dict))
+        }
+        Object::Array(arr) => {
+            let mut new_arr = Vec::with_capacity(arr.len());
+            for item in arr {
+                new_arr.push(clone_object_recursive(dest, source, item, visited)?);
+            }
+            Ok(Object::Array(new_arr))
+        }
+        Object::Stream(stream) => {
+            let mut new_dict = lopdf::Dictionary::new();
+            for (key, value) in stream.dict.iter() {
+                let cloned_value = clone_object_recursive(dest, source, value, visited)?;
+                new_dict.set(key.clone(), cloned_value);
+            }
+            let new_stream = Stream::new(new_dict, stream.content.clone());
+            Ok(Object::Stream(new_stream))
+        }
+        // Primitive types: clone directly
+        other => Ok(other.clone()),
+    }
 }
 
 /// Parse a hex color string (#RRGGBB or RRGGBB) into (r, g, b) u8 components.
