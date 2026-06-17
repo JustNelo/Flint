@@ -15,7 +15,6 @@ import {
   XCircle,
   Zap,
   Shield,
-  Loader2,
   AlertTriangle,
   FolderOpen,
   Stamp,
@@ -517,7 +516,7 @@ export function PdfWorkbenchTab() {
               <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-2">
                 {t("pdf_tool.primary_action")}
               </p>
-              <div className="grid grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {PRIMARY_ACTIONS.map((action) => {
                   const Icon = action.icon;
                   const isActive = activeTool === action.id;
@@ -884,17 +883,6 @@ export function PdfWorkbenchTab() {
                     <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>{step}</span>
                   </span>
                 ))}
-              </div>
-            )}
-
-            {/* Pipeline progress indicator */}
-            {pipelineStep && (
-              <div
-                className="flex items-center gap-2"
-                style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)" }}
-              >
-                <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.5} />
-                <span>{t(PIPELINE_STEP_LABELS[pipelineStep])}</span>
               </div>
             )}
           </>
