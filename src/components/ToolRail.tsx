@@ -49,19 +49,30 @@ export function ToolRail({ sections, activeTab, onSelect, onOpenCommand, appVers
           title={`${t("cmd.placeholder")} (Ctrl+K)`}
           className="flex items-center w-full cursor-pointer"
           style={{
-            gap: 8,
-            height: 34,
-            padding: pinned ? "0 10px" : 0,
+            gap: 6,
+            height: 30,
+            padding: pinned ? "0 8px" : 0,
             justifyContent: pinned ? "flex-start" : "center",
-            borderRadius: 8,
+            borderRadius: 7,
             background: "var(--bg-overlay)",
             border: "1px solid var(--flint-sidebar-border)",
             color: "var(--text-tertiary)",
           }}
         >
-          <Search style={{ width: 14, height: 14, flexShrink: 0 }} strokeWidth={1.5} />
+          <Search style={{ width: 13, height: 13, flexShrink: 0 }} strokeWidth={1.5} />
           {pinned && (
-            <span style={{ flex: 1, textAlign: "left", fontSize: 11, fontFamily: "var(--font-sans)" }}>
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                textAlign: "left",
+                fontSize: 11,
+                fontFamily: "var(--font-sans)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
               {t("cmd.placeholder")}
             </span>
           )}
@@ -69,15 +80,15 @@ export function ToolRail({ sections, activeTab, onSelect, onOpenCommand, appVers
             <kbd
               style={{
                 fontFamily: "var(--font-mono)",
-                fontSize: 10,
+                fontSize: 9,
                 lineHeight: 1,
                 letterSpacing: "0.5px",
-                padding: "3px 7px",
-                borderRadius: 5,
+                padding: "2px 5px",
+                borderRadius: 4,
                 background: "var(--bg-base)",
-                border: "1px solid var(--bg-border)",
                 color: "var(--text-tertiary)",
                 whiteSpace: "nowrap",
+                flexShrink: 0,
               }}
             >
               ⌘K
