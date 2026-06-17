@@ -9,7 +9,6 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock};
-use webp::Encoder;
 
 use crate::progress::emit_progress;
 use crate::utils::{ensure_output_dir, file_size, file_stem, get_extension};
@@ -131,16 +130,10 @@ pub fn compress_to_webp(
         &cancel,
         |input_path, out_dir| {
             let img = load_image(input_path)?;
-            let rgba = img.to_rgba8();
-            let (w, h) = rgba.dimensions();
-
-            let encoder = Encoder::from_rgba(&rgba, w, h);
-            let webp_data = encoder.encode(quality);
 
             let stem = file_stem(input_path);
             let output_path = out_dir.join(format!("{}-compressed.webp", stem));
-            fs::write(&output_path, &*webp_data)
-                .map_err(|e| format!("Cannot write WebP file: {}", e))?;
+            write_webp(&img, &output_path, quality)?;
 
             Ok((output_path.to_string_lossy().to_string(), None))
         },
@@ -200,13 +193,8 @@ pub fn convert_images(
 
             let output_path_str = match target_format.as_str() {
                 "webp" => {
-                    let rgba = img.to_rgba8();
-                    let (w, h) = rgba.dimensions();
-                    let encoder = Encoder::from_rgba(&rgba, w, h);
-                    let webp_data = encoder.encode(100.0);
                     let output_path = out_dir.join(format!("{}-converted.webp", stem));
-                    fs::write(&output_path, &*webp_data)
-                        .map_err(|e| format!("Cannot write WebP: {}", e))?;
+                    write_webp(&img, &output_path, 100.0)?;
                     output_path.to_string_lossy().to_string()
                 }
                 "png" => {
@@ -251,6 +239,20 @@ pub fn convert_images(
 
 // --- Shared helpers for new features ---
 
+/// Encode `img` as WebP at the given quality (clamped to `[0, 100]`) and write
+/// it to `path`. Centralizes the RGBA conversion + encode used by every WebP
+/// output site so quality handling stays consistent.
+fn write_webp(
+    img: &image::DynamicImage,
+    path: &std::path::Path,
+    quality: f32,
+) -> Result<(), String> {
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let data = webp::Encoder::from_rgba(&rgba, w, h).encode(quality.clamp(0.0, 100.0));
+    std::fs::write(path, &*data).map_err(|e| format!("Cannot write WebP: {}", e))
+}
+
 fn save_in_original_format(
     img: &DynamicImage,
     input_path: &str,
@@ -258,13 +260,7 @@ fn save_in_original_format(
 ) -> Result<(), String> {
     let ext = get_extension(input_path);
     match ext.as_str() {
-        "webp" => {
-            let rgba = img.to_rgba8();
-            let (w, h) = rgba.dimensions();
-            let encoder = Encoder::from_rgba(&rgba, w, h);
-            let webp_data = encoder.encode(90.0);
-            fs::write(output_path, &*webp_data).map_err(|e| format!("Cannot write WebP: {}", e))
-        }
+        "webp" => write_webp(img, output_path, 90.0),
         "jpg" | "jpeg" => img
             .save_with_format(output_path, ImageFormat::Jpeg)
             .map_err(|e| format!("Cannot save JPEG: {}", e)),
@@ -537,7 +533,7 @@ pub fn add_watermark(
             let (img_w, img_h) = (img.width(), img.height());
             let mut base = img.to_rgba8();
 
-            let text_width = (font_size * text.len() as f32 * 0.55) as i32;
+            let text_width = (font_size * text.chars().count() as f32 * 0.55) as i32;
             let text_height = font_size as i32;
             let margin = WATERMARK_MARGIN_PX;
 
@@ -759,10 +755,16 @@ pub fn optimize_lossless(
                     output_path.to_string_lossy().to_string()
                 }
                 "jpg" | "jpeg" => {
-                    // Re-encode JPEG with optimized Huffman tables at quality 100
+                    // JPEG is inherently lossy; re-encode at max quality (100) to minimize
+                    // additional generation loss while still rewriting clean Huffman tables.
                     let img = load_image(input_path)?;
                     let output_path = out_dir.join(format!("{}-optimized.jpg", stem));
-                    img.save_with_format(&output_path, ImageFormat::Jpeg)
+                    let mut out = std::fs::File::create(&output_path)
+                        .map_err(|e| format!("Cannot create optimized JPEG: {}", e))?;
+                    let mut encoder =
+                        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 100);
+                    encoder
+                        .encode_image(&img)
                         .map_err(|e| format!("Cannot save optimized JPEG: {}", e))?;
                     output_path.to_string_lossy().to_string()
                 }

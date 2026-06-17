@@ -1,4 +1,3 @@
-use image::ImageFormat;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -38,27 +37,31 @@ pub fn rasterize_svg(
     let stem = file_stem(input_path);
     let format_lower = output_format.to_lowercase();
 
-    let (ext, img_format) = match format_lower.as_str() {
-        "webp" => ("webp", None),
-        _ => ("png", Some(ImageFormat::Png)),
+    let ext = match format_lower.as_str() {
+        "webp" => "webp",
+        _ => "png",
     };
 
     let output_path = Path::new(output_dir).join(format!("{}-{}px.{}", stem, target_width, ext));
 
-    if let Some(fmt) = img_format {
-        // PNG output via image crate
-        let rgba_data = pixmap.data();
-        let img_buf: image::RgbaImage =
-            image::ImageBuffer::from_raw(target_width, target_height, rgba_data.to_vec())
-                .ok_or_else(|| "Cannot create image buffer".to_string())?;
-
-        img_buf
-            .save_with_format(&output_path, fmt)
-            .map_err(|e| format!("Cannot save {}: {}", ext.to_uppercase(), e))?;
+    if ext == "png" {
+        // tiny-skia's encode_png correctly un-premultiplies alpha.
+        let png = pixmap
+            .encode_png()
+            .map_err(|e| format!("Cannot encode PNG: {}", e))?;
+        fs::write(&output_path, &png).map_err(|e| format!("Cannot write PNG file: {}", e))?;
     } else {
-        // WebP output via webp crate
-        let rgba_data = pixmap.data();
-        let encoder = webp::Encoder::from_rgba(rgba_data, target_width, target_height);
+        // WebP: convert premultiplied pixels to straight alpha before encoding.
+        let mut straight = pixmap.data().to_vec();
+        for px in straight.chunks_exact_mut(4) {
+            let a = px[3] as u32;
+            if a > 0 && a < 255 {
+                px[0] = ((px[0] as u32 * 255 + a / 2) / a).min(255) as u8;
+                px[1] = ((px[1] as u32 * 255 + a / 2) / a).min(255) as u8;
+                px[2] = ((px[2] as u32 * 255 + a / 2) / a).min(255) as u8;
+            }
+        }
+        let encoder = webp::Encoder::from_rgba(&straight, target_width, target_height);
         let webp_data = encoder.encode(90.0);
         fs::write(&output_path, &*webp_data)
             .map_err(|e| format!("Cannot write WebP file: {}", e))?;

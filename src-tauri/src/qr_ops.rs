@@ -15,6 +15,7 @@ pub struct QrResult {
 
 /// Build the QR code image (white background, dark modules) for `text` at `size` px.
 fn build_qr_image(text: &str, size: u32) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>, String> {
+    let size = size.clamp(64, 4096);
     let code = QrCode::new(text.as_bytes()).map_err(|e| format!("QR encoding failed: {}", e))?;
 
     let module_count = code.width() as u32;

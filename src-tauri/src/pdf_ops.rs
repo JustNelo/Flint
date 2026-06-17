@@ -273,6 +273,30 @@ pub struct PdfCompressResult {
     pub errors: Vec<String>,
 }
 
+/// Returns `false` for image XObjects that cannot be safely re-encoded to a
+/// plain 8-bit DeviceRGB/DeviceGray JPEG without losing data or corrupting the
+/// page. Skipping these (leaving the original stream untouched) avoids dropping
+/// transparency (SMask), mangling predictors, or misinterpreting non-8-bit /
+/// indexed / ICC / array color spaces.
+fn is_safely_recompressible(dict: &lopdf::Dictionary) -> bool {
+    if dict.has(b"SMask") {
+        return false;
+    }
+    if let Ok(bpc) = dict.get(b"BitsPerComponent").and_then(|o| o.as_i64()) {
+        if bpc != 8 {
+            return false;
+        }
+    }
+    if dict.has(b"DecodeParms") || dict.has(b"DP") {
+        return false;
+    }
+    match dict.get(b"ColorSpace").and_then(|o| o.as_name()) {
+        Ok(b"DeviceRGB") | Ok(b"DeviceGray") => {}
+        _ => return false, // array / indexed / icc / missing → skip
+    }
+    true
+}
+
 /// Compress a PDF by re-encoding embedded images at lower JPEG quality.
 ///
 /// Handles two main stream types:
@@ -333,6 +357,12 @@ pub fn compress_pdf(
                 continue;
             }
 
+            // Skip images that cannot be safely re-encoded (SMask / non-8-bit /
+            // predictor / non-RGB-or-Gray color space) — leave them untouched.
+            if !is_safely_recompressible(&stream.dict) {
+                continue;
+            }
+
             let width = stream
                 .dict
                 .get(b"Width")
@@ -358,16 +388,16 @@ pub fn compress_pdf(
                 .unwrap_or("")
                 .to_string();
 
-            let filter = stream
-                .dict
-                .get(b"Filter")
-                .ok()
-                .and_then(|v| v.as_name().ok())
-                .and_then(|n| std::str::from_utf8(n).ok())
-                .unwrap_or("")
-                .to_string();
-
-            let is_dct = filter == "DCTDecode";
+            // Detect DCT either as a bare Name filter or as the last element of
+            // a filter array (e.g. [/FlateDecode /DCTDecode]).
+            let filter_name: Option<Vec<u8>> = match stream.dict.get(b"Filter") {
+                Ok(lopdf::Object::Name(n)) => Some(n.clone()),
+                Ok(lopdf::Object::Array(a)) => {
+                    a.last().and_then(|o| o.as_name().ok()).map(|n| n.to_vec())
+                }
+                _ => None,
+            };
+            let is_dct = filter_name.as_deref() == Some(b"DCTDecode");
             let original_len = stream.content.len();
 
             // Clone + decompress non-JPEG streams
@@ -737,8 +767,10 @@ pub fn protect_pdf(
             hash.0.to_vec()
         });
 
-    // Permission flags — bit 3 (print) and bit 9 (high-res print) set, content
-    // extraction disabled. PDF spec uses signed 32-bit with reserved high bits.
+    // Permission flags. -4 == 0xFFFFFFFC grants ALL permissions except the two
+    // reserved low bits (1 and 2): printing, copying/extraction, modification,
+    // etc. all stay enabled. This does NOT disable content extraction — narrow
+    // the value only if specific restrictions are actually wanted.
     let permissions: i32 = -4;
 
     let o_value = compute_o_value_r4(pw_bytes, pw_bytes);
