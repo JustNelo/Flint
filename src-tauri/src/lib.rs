@@ -31,20 +31,31 @@ use rename_ops::RenameResult;
 use sprite_ops::SpriteSheetResult;
 use std::path::{Component, Path};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use svg_ops::SvgRasterizeResult;
 use tauri::Manager;
 
 /// Thread-safe wrapper around `Pdfium`.
-/// SAFETY: The `thread_safe` feature of pdfium-render ensures all internal
-/// operations are synchronized via mutexes, making concurrent access safe.
-struct SendPdfium(Pdfium);
+///
+/// SAFETY: Pdfium is NOT safe for concurrent use. The `thread_safe` feature of
+/// pdfium-render only takes its global lock once at `FPDF_InitLibrary` and holds
+/// it until `FPDF_DestroyLibrary` — it does **not** serialize individual calls on
+/// a shared instance. We therefore wrap the instance in our own `Mutex` and route
+/// every pdfium operation through `lock()`, guaranteeing that only one thread ever
+/// calls into pdfium at a time. With that guarantee, sharing the instance across
+/// threads (`Send` + `Sync`) is sound.
+struct SendPdfium(Mutex<Pdfium>);
 unsafe impl Send for SendPdfium {}
 unsafe impl Sync for SendPdfium {}
 
 impl SendPdfium {
-    fn inner(&self) -> &Pdfium {
-        &self.0
+    /// Acquire exclusive access to the shared Pdfium instance for the duration of
+    /// a single operation. Recovers from a poisoned lock (left by a previously
+    /// panicking operation) so PDF features keep working.
+    fn lock(&self) -> MutexGuard<'_, Pdfium> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
@@ -267,10 +278,11 @@ async fn extract_pdf_images(
     let output_stem = output_stem.map(|s| utils::sanitize_stem(&s)).transpose()?;
     let pdfium = require_pdfium(&pdfium_state)?;
     run_blocking(move || {
+        let guard = pdfium.lock();
         pdf_ops::extract_images_from_pdf(
             &pdf_path,
             &output_dir,
-            pdfium.inner(),
+            &guard,
             output_stem.as_deref(),
             &app_handle,
         )
@@ -414,7 +426,11 @@ async fn get_pdf_page_count(
 ) -> Result<usize, String> {
     validate_path(&pdf_path)?;
     let pdfium = require_pdfium(&pdfium_state)?;
-    run_blocking(move || pdf_builder_ops::get_pdf_page_count(&pdf_path, pdfium.inner())).await?
+    run_blocking(move || {
+        let guard = pdfium.lock();
+        pdf_builder_ops::get_pdf_page_count(&pdf_path, &guard)
+    })
+    .await?
 }
 
 #[tauri::command]
@@ -427,12 +443,8 @@ async fn generate_pdf_thumbnails(
     validate_paths(&file_paths)?;
     let pdfium = require_pdfium(&pdfium_state)?;
     run_blocking(move || {
-        pdf_builder_ops::generate_thumbnails_batch(
-            file_paths,
-            pdfium.inner(),
-            start_page,
-            max_pages,
-        )
+        let guard = pdfium.lock();
+        pdf_builder_ops::generate_thumbnails_batch(file_paths, &guard, start_page, max_pages)
     })
     .await
 }
@@ -447,12 +459,8 @@ async fn render_pdf_page(
     validate_path(&pdf_path)?;
     let pdfium = require_pdfium(&pdfium_state)?;
     run_blocking(move || {
-        pdf_builder_ops::render_pdf_page_base64(
-            &pdf_path,
-            page_number,
-            target_width,
-            pdfium.inner(),
-        )
+        let guard = pdfium.lock();
+        pdf_builder_ops::render_pdf_page_base64(&pdf_path, page_number, target_width, &guard)
     })
     .await?
 }
@@ -535,10 +543,11 @@ async fn pdf_to_images(
     let dpi = dpi.clamp(72, 1200);
     let pdfium = require_pdfium(&pdfium_state)?;
     run_blocking(move || {
+        let guard = pdfium.lock();
         pdf_ops::pdf_to_images(
             &pdf_path,
             &output_dir,
-            pdfium.inner(),
+            &guard,
             &format,
             dpi,
             output_stem.as_deref(),
@@ -658,8 +667,11 @@ async fn unlock_pdf_cmd(
     validate_path(&pdf_path)?;
     validate_path(&output_dir)?;
     let pdfium = require_pdfium(&pdfium_state)?;
-    run_blocking(move || pdf_ops::unlock_pdf(pdfium.inner(), &pdf_path, &password, &output_dir))
-        .await
+    run_blocking(move || {
+        let guard = pdfium.lock();
+        pdf_ops::unlock_pdf(&guard, &pdf_path, &password, &output_dir)
+    })
+    .await
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -881,7 +893,7 @@ pub fn run() {
                 Ok(path) => match Pdfium::bind_to_library(&path) {
                     Ok(bindings) => {
                         eprintln!("Pdfium library bound successfully from: {}", path);
-                        Some(Arc::new(SendPdfium(Pdfium::new(bindings))))
+                        Some(Arc::new(SendPdfium(Mutex::new(Pdfium::new(bindings)))))
                     }
                     Err(e) => {
                         eprintln!(
