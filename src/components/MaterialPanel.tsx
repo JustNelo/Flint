@@ -9,6 +9,10 @@ interface MaterialPanelProps {
   hasResults: boolean;
   material: ReactNode;
   results: ReactNode;
+  /** Label for the first segment (defaults to the generic "material" label). */
+  materialLabel?: string;
+  /** Label for the results segment (defaults to "results"). */
+  resultsLabel?: string;
 }
 
 function segStyle(active: boolean): React.CSSProperties {
@@ -24,7 +28,15 @@ function segStyle(active: boolean): React.CSSProperties {
   };
 }
 
-export function MaterialPanel({ mode, onModeChange, hasResults, material, results }: MaterialPanelProps) {
+export function MaterialPanel({
+  mode,
+  onModeChange,
+  hasResults,
+  material,
+  results,
+  materialLabel,
+  resultsLabel,
+}: MaterialPanelProps) {
   const { t } = useT();
 
   return (
@@ -38,7 +50,7 @@ export function MaterialPanel({ mode, onModeChange, hasResults, material, result
             onClick={() => onModeChange("material")}
             style={{ ...segStyle(mode === "material"), cursor: "pointer" }}
           >
-            {t("etabli.material")}
+            {materialLabel ?? t("etabli.material")}
           </button>
           <button
             onClick={() => hasResults && onModeChange("results")}
@@ -49,7 +61,7 @@ export function MaterialPanel({ mode, onModeChange, hasResults, material, result
               opacity: hasResults ? 1 : 0.4,
             }}
           >
-            {t("etabli.results")}
+            {resultsLabel ?? t("etabli.results")}
           </button>
         </div>
       </div>
