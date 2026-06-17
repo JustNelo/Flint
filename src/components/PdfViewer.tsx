@@ -26,6 +26,9 @@ export function PdfViewer({ pdfPath, initialPage = 1, onClose }: PdfViewerProps)
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageEls = useRef<Map<number, HTMLDivElement>>(new Map());
   const didInitialScroll = useRef(false);
+  // Real page aspect (height / width), learned from the first rendered page so
+  // placeholders reserve the correct space for any page size (not just A4).
+  const aspectRef = useRef(1.414);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,7 +51,9 @@ export function PdfViewer({ pdfPath, initialPage = 1, onClose }: PdfViewerProps)
     (page: number) => {
       if (cacheRef.current.has(page)) return;
       const w = widthRef.current;
-      invoke<string>("render_pdf_page", { pdfPath, pageNumber: page, targetWidth: w })
+      // Render at physical pixels so text stays crisp on HiDPI / Windows scaling.
+      const renderW = Math.round(w * (window.devicePixelRatio || 1));
+      invoke<string>("render_pdf_page", { pdfPath, pageNumber: page, targetWidth: renderW })
         .then((b64) => {
           if (widthRef.current !== w) return;
           cacheRef.current.set(page, `data:image/jpeg;base64,${b64}`);
@@ -118,7 +123,7 @@ export function PdfViewer({ pdfPath, initialPage = 1, onClose }: PdfViewerProps)
   }, [onClose]);
 
   const pages = Array.from({ length: pageCount }, (_, i) => i + 1);
-  const intrinsicH = Math.round(width * 1.414);
+  const intrinsicH = Math.round(width * aspectRef.current);
 
   return (
     <div
@@ -194,8 +199,6 @@ export function PdfViewer({ pdfPath, initialPage = 1, onClose }: PdfViewerProps)
                 style={{
                   width,
                   maxWidth: "100%",
-                  contentVisibility: "auto",
-                  containIntrinsicSize: `auto ${intrinsicH}px`,
                   borderRadius: 4,
                   overflow: "hidden",
                   background: "#ffffff",
@@ -203,7 +206,21 @@ export function PdfViewer({ pdfPath, initialPage = 1, onClose }: PdfViewerProps)
                 }}
               >
                 {src ? (
-                  <img src={src} alt={`page ${page}`} style={{ width: "100%", display: "block" }} />
+                  <img
+                    src={src}
+                    alt={`page ${page}`}
+                    onLoad={(e) => {
+                      const img = e.currentTarget;
+                      if (img.naturalWidth > 0) {
+                        const a = img.naturalHeight / img.naturalWidth;
+                        if (Math.abs(a - aspectRef.current) > 0.01) {
+                          aspectRef.current = a;
+                          force((n) => n + 1);
+                        }
+                      }
+                    }}
+                    style={{ width: "100%", display: "block" }}
+                  />
                 ) : (
                   <div
                     style={{
