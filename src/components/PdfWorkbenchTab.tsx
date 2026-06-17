@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   FileUp,
@@ -8,7 +7,6 @@ import {
   FileDown,
   Lock,
   Unlock,
-  Plus,
   Trash2,
   Upload,
   CheckCircle,
@@ -25,6 +23,7 @@ import { toast } from "sonner";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { cn, formatSize, safeAssetUrl } from "../lib/utils";
 import { PdfPageGrid } from "./PdfPageGrid";
+import { DropZone } from "./DropZone";
 import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
 import { ControlsPanel } from "./ControlsPanel";
 import { ActionButton } from "./ui/ActionButton";
@@ -41,8 +40,6 @@ import {
   type WorkbenchResult,
 } from "../hooks/usePdfWorkbench";
 import type { PdfWatermarkPosition } from "../types";
-
-const ACCEPTED_EXTENSIONS = new Set(["png", "jpg", "jpeg", "bmp", "ico", "tiff", "tif", "webp", "pdf"]);
 
 // --- Password strength helper ---
 function getPasswordStrength(pw: string): { level: number; label: string; color: string } {
@@ -179,66 +176,6 @@ export function PdfWorkbenchTab() {
   // Show post-processing options only for PDF-output actions
   const showPostProcessing = PDF_OUTPUT_ACTIONS.has(activeTool);
 
-  // Window-level drag-drop listener
-  const filterPaths = useMemo(() => {
-    return (paths: string[]) =>
-      paths.filter((p) => {
-        const ext = p.split(".").pop()?.toLowerCase() || "";
-        return ACCEPTED_EXTENSIONS.has(ext);
-      });
-  }, []);
-
-  useEffect(() => {
-    const appWindow = getCurrentWindow();
-    const unlisten = appWindow.onDragDropEvent((event) => {
-      if (event.payload.type === "drop") {
-        const filtered = filterPaths(event.payload.paths);
-        if (filtered.length > 0) {
-          if (mode === "unlock") {
-            const pdfs = filtered.filter((p) => p.toLowerCase().endsWith(".pdf"));
-            if (pdfs.length > 0) setUnlockFile(pdfs[0]);
-          } else {
-            addFiles(filtered);
-          }
-        }
-      }
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [filterPaths, addFiles, mode]);
-
-  const handleAddMore = useCallback(async () => {
-    try {
-      const selected = await open({
-        multiple: true,
-        filters: [
-          {
-            name: "Images & PDFs",
-            extensions: ["png", "jpg", "jpeg", "bmp", "ico", "tiff", "tif", "webp", "pdf"],
-          },
-        ],
-      });
-      if (!selected) return;
-      const paths = Array.isArray(selected) ? selected : [selected];
-      if (paths.length > 0) addFiles(paths);
-    } catch (err) {
-      toast.error(t("toast.file_open_failed"));
-    }
-  }, [addFiles, t]);
-
-  const handleSelectUnlockFile = useCallback(async () => {
-    try {
-      const selected = await open({
-        multiple: false,
-        filters: [{ name: "PDF", extensions: ["pdf"] }],
-      });
-      if (selected && typeof selected === "string") setUnlockFile(selected);
-    } catch (err) {
-      toast.error(t("toast.file_open_failed"));
-    }
-  }, [t]);
-
   const handleSelectWmLogo = useCallback(async () => {
     try {
       const selected = await open({
@@ -370,38 +307,16 @@ export function PdfWorkbenchTab() {
 
   const pageMaterial = (
     <div className="space-y-3">
-      {/* Drop zone / Add files bar */}
-      {pages.length === 0 ? (
-        <div
-          onClick={handleAddMore}
-          className="relative flex flex-col items-center justify-center gap-3 p-8 cursor-pointer"
-          style={{
-            borderRadius: 16,
-            border: "2px dashed var(--bg-border)",
-            background: "var(--bg-overlay)",
-            transition: "all 200ms ease",
-          }}
-        >
-          <div
-            className="flex h-12 w-12 items-center justify-center rounded-full"
-            style={{ background: "var(--bg-elevated)", color: "var(--text-tertiary)" }}
-          >
-            <Upload className="h-6 w-6" strokeWidth={1.5} />
-          </div>
-          <div className="text-center">
-            <p style={{ fontSize: "var(--text-base)", fontWeight: 500, color: "var(--text-primary)" }}>
-              {t("dropzone.pdf_workbench")}
-            </p>
-            <p className="mt-1 text-xs text-neutral-500">{t("dropzone.sublabel_pdf_workbench")}</p>
-          </div>
-        </div>
-      ) : (
+      <DropZone
+        accept="png,jpg,jpeg,bmp,ico,tiff,tif,webp,pdf"
+        label={pages.length === 0 ? t("dropzone.pdf_workbench") : t("dropzone.add_more")}
+        sublabel={t("dropzone.sublabel_pdf_workbench")}
+        compact={pages.length > 0}
+        onFilesSelected={addFiles}
+      />
+
+      {pages.length > 0 && (
         <div className="flex items-center gap-2">
-          <button onClick={handleAddMore} className="btn-ghost">
-            <Plus className="h-4 w-4" strokeWidth={1.5} />
-            {t("label.add_files")}
-          </button>
-          {/* Grid modified indicator */}
           {gridModified && (
             <span className="flex items-center gap-1 text-[10px] text-amber-400">
               <AlertTriangle className="h-3 w-3" strokeWidth={1.5} />
@@ -430,29 +345,16 @@ export function PdfWorkbenchTab() {
 
   const unlockMaterial = (
     <div className="space-y-3">
-      <div
-        onClick={handleSelectUnlockFile}
-        className="relative flex flex-col items-center justify-center gap-3 p-8 cursor-pointer"
-        style={{
-          borderRadius: 16,
-          border: "2px dashed var(--bg-border)",
-          background: "var(--bg-overlay)",
-          transition: "all 200ms ease",
+      <DropZone
+        accept="pdf"
+        multiple={false}
+        label={t("pdf_tool.drop_locked_pdf")}
+        sublabel={t("pdf_tool.drop_locked_pdf_hint")}
+        compact={!!unlockFile}
+        onFilesSelected={(paths) => {
+          if (paths[0]) setUnlockFile(paths[0]);
         }}
-      >
-        <div
-          className="flex h-12 w-12 items-center justify-center rounded-full"
-          style={{ background: "var(--bg-elevated)", color: "var(--text-tertiary)" }}
-        >
-          <Lock className="h-6 w-6" strokeWidth={1.5} />
-        </div>
-        <div className="text-center">
-          <p style={{ fontSize: "var(--text-base)", fontWeight: 500, color: "var(--text-primary)" }}>
-            {t("pdf_tool.drop_locked_pdf")}
-          </p>
-          <p className="mt-1 text-xs text-neutral-500">{t("pdf_tool.drop_locked_pdf_hint")}</p>
-        </div>
-      </div>
+      />
 
       {unlockFile && (
         <div className="forge-card p-4">
