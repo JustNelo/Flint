@@ -542,11 +542,13 @@ body::after {
 
 .cmd-esc-hint {
   font-family: var(--font-mono);
-  font-size: 9px;
-  color: var(--flint-text-ghost);
-  background: var(--bg-overlay);
-  padding: 2px 6px;
-  border-radius: 3px;
+  font-size: 10px;
+  letter-spacing: 0.3px;
+  color: var(--flint-text-muted);
+  background: var(--bg-base);
+  border: 1px solid var(--flint-border);
+  padding: 2px 7px;
+  border-radius: 4px;
 }
 
 .cmd-list {
