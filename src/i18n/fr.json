@@ -429,5 +429,10 @@
   "label.qr_preview": "Aperçu",
   "action.save_qr": "Enregistrer le PNG",
   "action.copy_image": "Copier",
-  "toast.qr_copied": "QR code copié dans le presse-papier"
+  "toast.qr_copied": "QR code copié dans le presse-papier",
+
+  "label.source": "Source",
+  "action.copy_datauri": "Copier le data URI",
+  "action.copy_img": "Copier <img>",
+  "action.copy_css": "Copier CSS"
 }

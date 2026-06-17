@@ -429,5 +429,10 @@
   "label.qr_preview": "Preview",
   "action.save_qr": "Save PNG",
   "action.copy_image": "Copy",
-  "toast.qr_copied": "QR code copied to clipboard"
+  "toast.qr_copied": "QR code copied to clipboard",
+
+  "label.source": "Source",
+  "action.copy_datauri": "Copy data URI",
+  "action.copy_img": "Copy <img>",
+  "action.copy_css": "Copy CSS"
 }
