@@ -146,6 +146,7 @@ const ETABLI_TOOLS = new Set<TabId>([
   "bulk-rename",
   "crop",
   "animation",
+  "pdf-toolkit",
 ]);
 
 const TAB_LABEL_KEYS: Record<TabId, string> = {
@@ -280,6 +281,7 @@ function App() {
             {activeTab === "bulk-rename" && <BulkRenameTab />}
             {activeTab === "crop" && <CropTab />}
             {activeTab === "animation" && <AnimationTab />}
+            {activeTab === "pdf-toolkit" && <PdfWorkbenchTab />}
           </div>
         ) : (
           <div className="mx-auto" style={{ maxWidth: 860 }}>
@@ -300,7 +302,6 @@ function App() {
               </p>
             </div>
 
-            {activeTab === "pdf-toolkit" && <PdfWorkbenchTab />}
             {activeTab === "palette" && <PaletteTab />}
             {activeTab === "base64" && <Base64Tab />}
             {activeTab === "qrcode" && <QrCodeTab />}
