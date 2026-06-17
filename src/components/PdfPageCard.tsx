@@ -1,18 +1,17 @@
 import { memo } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { X, FileText, Image, Maximize2 } from "lucide-react";
+import { X, FileText, Image } from "lucide-react";
 import { useT } from "../i18n/i18n";
 import type { BuilderPage } from "../hooks/usePdfWorkbench";
 
 interface PdfPageCardProps {
   page: BuilderPage;
   onRemove: (id: string) => void;
-  onOpen?: (page: BuilderPage) => void;
 }
 
 export const PdfPageCard = memo(
-  function PdfPageCard({ page, onRemove, onOpen }: PdfPageCardProps) {
+  function PdfPageCard({ page, onRemove }: PdfPageCardProps) {
     const { t } = useT();
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page.id });
 
@@ -42,18 +41,6 @@ export const PdfPageCard = memo(
         >
           <X className="h-3 w-3 text-white" strokeWidth={1.5} />
         </button>
-
-        {/* View button — PDF pages only; stops drag activation */}
-        {page.sourceType === "pdf" && onOpen && (
-          <button
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => onOpen(page)}
-            className="absolute top-1 right-7 z-10 rounded-full bg-black/60 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer hover:bg-black/80"
-            title={page.fileName}
-          >
-            <Maximize2 className="h-3 w-3 text-white" strokeWidth={1.5} />
-          </button>
-        )}
 
         {/* Type badge */}
         <div className="absolute top-1 left-1 z-10">
@@ -113,8 +100,7 @@ export const PdfPageCard = memo(
       prev.page.id === next.page.id &&
       prev.page.thumbnailSrc === next.page.thumbnailSrc &&
       prev.page.thumbnailLoaded === next.page.thumbnailLoaded &&
-      prev.onRemove === next.onRemove &&
-      prev.onOpen === next.onOpen
+      prev.onRemove === next.onRemove
     );
   },
 );

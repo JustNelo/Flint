@@ -450,22 +450,6 @@ async fn generate_pdf_thumbnails(
 }
 
 #[tauri::command]
-async fn render_pdf_page(
-    pdfium_state: tauri::State<'_, PdfiumState>,
-    pdf_path: String,
-    page_number: usize,
-    target_width: u32,
-) -> Result<String, String> {
-    validate_path(&pdf_path)?;
-    let pdfium = require_pdfium(&pdfium_state)?;
-    run_blocking(move || {
-        let guard = pdfium.lock();
-        pdf_builder_ops::render_pdf_page_base64(&pdf_path, page_number, target_width, &guard)
-    })
-    .await?
-}
-
-#[tauri::command]
 async fn merge_to_pdf(
     app_handle: tauri::AppHandle,
     items: Vec<PdfBuilderItem>,
@@ -856,7 +840,6 @@ pub fn run() {
             read_metadata,
             get_pdf_page_count,
             generate_pdf_thumbnails,
-            render_pdf_page,
             merge_to_pdf,
             pdf_to_images,
             split_pdf,
