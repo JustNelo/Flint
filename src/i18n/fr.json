@@ -434,5 +434,6 @@
   "label.source": "Source",
   "action.copy_datauri": "Copier le data URI",
   "action.copy_img": "Copier <img>",
-  "action.copy_css": "Copier CSS"
+  "action.copy_css": "Copier CSS",
+  "action.copy_all_hex": "Copier tout (HEX)"
 }

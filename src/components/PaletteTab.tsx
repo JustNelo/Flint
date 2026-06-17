@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Loader2, Pipette, Copy, Check, FileJson, FileCode, Crosshair } from "lucide-react";
+import { Pipette, Copy, Check, FileJson, FileCode, Crosshair } from "lucide-react";
 import { toast } from "sonner";
 import { DropZone } from "./DropZone";
 import { ImageGrid } from "./ImageGrid";
 import { useFileSelection } from "../hooks/useFileSelection";
 import { useT } from "../i18n/i18n";
-import { safeAssetUrl } from "../lib/utils";
+import { safeAssetUrl, logError } from "../lib/utils";
 
 interface ColorInfo {
   hex: string;
@@ -106,7 +106,7 @@ export function PaletteTab() {
   const { files, addFiles, removeFile, clearFiles, reorderFiles } = useFileSelection();
   const [mode, setMode] = useState<PaletteMode>("palette");
   const [numColors, setNumColors] = useState(6);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [palette, setPalette] = useState<ColorInfo[]>([]);
   const [pickedColor, setPickedColor] = useState<ColorInfo | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -178,29 +178,34 @@ export function PaletteTab() {
     setPickedColor({ hex, r, g, b, percentage: 0 });
   }, []);
 
-  const handleExtract = useCallback(async () => {
-    if (files.length === 0) {
-      toast.error(t("toast.select_images"));
+  // Live palette extraction (palette mode), debounced on the color-count slider.
+  useEffect(() => {
+    if (mode !== "palette" || files.length === 0) {
       return;
     }
-
+    let cancelled = false;
     setLoading(true);
-    setPalette([]);
-
-    try {
-      const result = await invoke<PaletteResult>("extract_palette", {
-        imagePath: files[0],
-        numColors: numColors,
-      });
-
-      setPalette(result.colors);
-      toast.success(t("toast.palette_success", { n: result.colors.length }));
-    } catch (err) {
-      toast.error(t("toast.operation_failed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [files, numColors, t]);
+    const id = setTimeout(() => {
+      invoke<PaletteResult>("extract_palette", { imagePath: files[0], numColors })
+        .then((result) => {
+          if (!cancelled) setPalette(result.colors);
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            logError("palette:extract", err);
+            setPalette([]);
+            toast.error(t("toast.operation_failed"));
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [files, numColors, mode, t]);
 
   const copyHex = useCallback(async (hex: string, index: number) => {
     try {
@@ -212,6 +217,17 @@ export function PaletteTab() {
       // Fallback for environments where clipboard API isn't available
     }
   }, []);
+
+  const copyAllHex = useCallback(async () => {
+    if (palette.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(palette.map((c) => c.hex).join("\n"));
+      toast.success(t("toast.copied"));
+    } catch (err) {
+      logError("palette:copyall", err);
+      toast.error(t("toast.copy_failed"));
+    }
+  }, [palette, t]);
 
   const copyPickedColor = useCallback(async () => {
     if (!pickedColor) return;
@@ -257,156 +273,179 @@ export function PaletteTab() {
     URL.revokeObjectURL(url);
   }, [palette, pickedColor]);
 
+  const PANEL: React.CSSProperties = {
+    borderRadius: 12,
+    border: "1px solid var(--bg-border)",
+    background: "var(--bg-elevated)",
+    padding: 14,
+  };
+
   return (
-    <div className="space-y-5">
-      <DropZone
-        accept="png,jpg,jpeg,bmp,tiff,tif,webp"
-        label={t("dropzone.images_palette")}
-        sublabel={t("dropzone.sublabel_palette")}
-        onFilesSelected={handleFilesSelected}
-      />
-
-      <ImageGrid files={files} onReorder={reorderFiles} onRemove={removeFile} onClear={handleClearFiles} />
-
-      {/* Mode toggle */}
-      <div className="space-y-2">
-        <label className="forge-label">{t("label.palette_mode")}</label>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setMode("palette")}
-            className={`btn-toggle ${mode === "palette" ? "btn-toggle-active" : ""}`}
-          >
-            <Pipette className="h-3.5 w-3.5" strokeWidth={1.5} />
-            {t("label.palette_extract")}
-          </button>
-          <button
-            onClick={() => setMode("eyedropper")}
-            className={`btn-toggle ${mode === "eyedropper" ? "btn-toggle-active" : ""}`}
-          >
-            <Crosshair className="h-3.5 w-3.5" strokeWidth={1.5} />
-            {t("label.eyedropper")}
-          </button>
-        </div>
-      </div>
-
-      {/* Palette extraction mode */}
-      {mode === "palette" && (
-        <>
+    <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+      <section className="flex-1 min-w-0" style={PANEL}>
+        {/* LEFT — source */}
+        <div className="space-y-5">
+          {/* Mode toggle */}
           <div className="space-y-2">
-            <label className="forge-label">{t("label.num_colors")}</label>
-            <div className="flex items-center gap-3">
-              <input
-                type="range"
-                min={3}
-                max={12}
-                value={numColors}
-                onChange={(e) => setNumColors(Number(e.target.value))}
-                className="flex-1 forge-slider"
-                style={{
-                  background: `linear-gradient(to right, var(--indigo-core) 0%, var(--indigo-core) ${((numColors - 3) / (12 - 3)) * 100}%, var(--bg-overlay) ${((numColors - 3) / (12 - 3)) * 100}%, var(--bg-overlay) 100%)`,
-                }}
-              />
-              <span
-                style={{
-                  fontSize: "var(--text-sm)",
-                  fontFamily: "var(--font-mono)",
-                  color: "var(--text-tertiary)",
-                  width: 24,
-                  textAlign: "right" as const,
-                }}
+            <label className="forge-label">{t("label.palette_mode")}</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setMode("palette")}
+                className={`btn-toggle ${mode === "palette" ? "btn-toggle-active" : ""}`}
               >
-                {numColors}
-              </span>
+                <Pipette className="h-3.5 w-3.5" strokeWidth={1.5} />
+                {t("label.palette_extract")}
+              </button>
+              <button
+                onClick={() => setMode("eyedropper")}
+                className={`btn-toggle ${mode === "eyedropper" ? "btn-toggle-active" : ""}`}
+              >
+                <Crosshair className="h-3.5 w-3.5" strokeWidth={1.5} />
+                {t("label.eyedropper")}
+              </button>
             </div>
           </div>
 
-          <button onClick={handleExtract} disabled={loading || files.length === 0} className="btn-primary w-full">
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
-            ) : (
-              <Pipette className="h-4 w-4" strokeWidth={1.5} />
-            )}
-            {loading ? t("status.extracting_colors") : t("action.extract_palette")}
-          </button>
-        </>
-      )}
+          <DropZone
+            accept="png,jpg,jpeg,bmp,tiff,tif,webp"
+            label={files.length === 0 ? t("dropzone.images_palette") : t("dropzone.add_more")}
+            sublabel={t("dropzone.sublabel_palette")}
+            compact={files.length > 0}
+            multiple={false}
+            onFilesSelected={handleFilesSelected}
+          />
 
-      {/* Eyedropper mode */}
-      {mode === "eyedropper" && files.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-xs text-neutral-500">{t("label.eyedropper_hint")}</p>
-          <div className="forge-card overflow-hidden p-0">
-            <canvas ref={canvasRef} onClick={handleCanvasClick} className="w-full cursor-crosshair" />
-          </div>
+          <ImageGrid files={files} onReorder={reorderFiles} onRemove={removeFile} onClear={handleClearFiles} />
 
-          {pickedColor && (
-            <div className="forge-card p-4">
-              <div className="flex items-center gap-4">
-                <div
-                  className="h-14 w-14 shrink-0"
-                  style={{ borderRadius: 12, border: "1px solid var(--bg-border)", backgroundColor: pickedColor.hex }}
-                />
-                <div className="flex-1 space-y-1">
-                  <p
-                    style={{
-                      fontSize: "var(--text-base)",
-                      fontFamily: "var(--font-mono)",
-                      fontWeight: 500,
-                      color: "var(--text-primary)",
-                    }}
-                  >
-                    {pickedColor.hex}
-                  </p>
-                  <p className="text-xs font-mono text-neutral-400">
-                    rgb({pickedColor.r}, {pickedColor.g}, {pickedColor.b})
-                  </p>
-                  <p className="text-xs font-mono text-neutral-500">
-                    {formatHsl(pickedColor.r, pickedColor.g, pickedColor.b)}
-                  </p>
-                </div>
-                <button onClick={copyPickedColor} className="btn-icon">
-                  <Copy className="h-4 w-4" strokeWidth={1.5} />
-                </button>
+          {/* Eyedropper mode */}
+          {mode === "eyedropper" && files.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs text-neutral-500">{t("label.eyedropper_hint")}</p>
+              <div className="forge-card overflow-hidden p-0">
+                <canvas ref={canvasRef} onClick={handleCanvasClick} className="w-full cursor-crosshair" />
               </div>
             </div>
           )}
         </div>
-      )}
+      </section>
 
-      {/* Palette results */}
-      {palette.length > 0 && mode === "palette" && (
-        <div className="mt-4 space-y-3">
-          <div className="forge-card p-4 space-y-3">
-            <p style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}>
-              {t("result.colors_extracted", { n: palette.length })}
-            </p>
-
-            <div className="grid grid-cols-2 gap-2">
-              {palette.map((color, index) => (
-                <ColorCard key={index} color={color} index={index} copiedIndex={copiedIndex} onCopy={copyHex} />
-              ))}
+      <section style={{ width: 360, flexShrink: 0, ...PANEL }}>
+        {/* RIGHT — output */}
+        {mode === "palette" ? (
+          <>
+            <div className="space-y-2">
+              <label className="forge-label">{t("label.num_colors")}</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={3}
+                  max={12}
+                  value={numColors}
+                  onChange={(e) => setNumColors(Number(e.target.value))}
+                  className="flex-1 forge-slider"
+                  style={{
+                    background: `linear-gradient(to right, var(--indigo-core) 0%, var(--indigo-core) ${((numColors - 3) / (12 - 3)) * 100}%, var(--bg-overlay) ${((numColors - 3) / (12 - 3)) * 100}%, var(--bg-overlay) 100%)`,
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: "var(--text-sm)",
+                    fontFamily: "var(--font-mono)",
+                    color: "var(--text-tertiary)",
+                    width: 24,
+                    textAlign: "right" as const,
+                  }}
+                >
+                  {numColors}
+                </span>
+              </div>
             </div>
 
-            {/* Color bar preview */}
-            <div className="flex h-8 overflow-hidden" style={{ borderRadius: 8, border: "1px solid var(--bg-border)" }}>
-              {palette.map((color, index) => (
-                <div key={index} className="flex-1" style={{ backgroundColor: color.hex }} />
-              ))}
-            </div>
-          </div>
+            {palette.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                <div className="forge-card p-4 space-y-3">
+                  <p style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}>
+                    {t("result.colors_extracted", { n: palette.length })}
+                  </p>
 
-          <div className="flex gap-2">
-            <button onClick={exportJson} className="btn-ghost">
-              <FileJson className="h-3.5 w-3.5" strokeWidth={1.5} />
-              {t("label.export_json")}
-            </button>
-            <button onClick={exportCss} className="btn-ghost">
-              <FileCode className="h-3.5 w-3.5" strokeWidth={1.5} />
-              {t("label.export_css")}
-            </button>
-          </div>
-        </div>
-      )}
+                  <div className="grid grid-cols-2 gap-2">
+                    {palette.map((color, index) => (
+                      <ColorCard key={index} color={color} index={index} copiedIndex={copiedIndex} onCopy={copyHex} />
+                    ))}
+                  </div>
+
+                  {/* Color bar preview */}
+                  <div
+                    className="flex h-8 overflow-hidden"
+                    style={{ borderRadius: 8, border: "1px solid var(--bg-border)" }}
+                  >
+                    {palette.map((color, index) => (
+                      <div key={index} className="flex-1" style={{ backgroundColor: color.hex }} />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex gap-2" style={{ flexWrap: "wrap" }}>
+                  <button onClick={exportJson} className="btn-ghost">
+                    <FileJson className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    {t("label.export_json")}
+                  </button>
+                  <button onClick={exportCss} className="btn-ghost">
+                    <FileCode className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    {t("label.export_css")}
+                  </button>
+                  <button onClick={copyAllHex} disabled={palette.length === 0} className="btn-ghost">
+                    <Copy className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    {t("action.copy_all_hex")}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <span style={{ fontSize: "var(--text-sm)", color: "var(--text-tertiary)" }}>
+                {t("dropzone.sublabel_palette")}
+              </span>
+            )}
+          </>
+        ) : (
+          <>
+            {pickedColor ? (
+              <div className="forge-card p-4">
+                <div className="flex items-center gap-4">
+                  <div
+                    className="h-14 w-14 shrink-0"
+                    style={{ borderRadius: 12, border: "1px solid var(--bg-border)", backgroundColor: pickedColor.hex }}
+                  />
+                  <div className="flex-1 space-y-1">
+                    <p
+                      style={{
+                        fontSize: "var(--text-base)",
+                        fontFamily: "var(--font-mono)",
+                        fontWeight: 500,
+                        color: "var(--text-primary)",
+                      }}
+                    >
+                      {pickedColor.hex}
+                    </p>
+                    <p className="text-xs font-mono text-neutral-400">
+                      rgb({pickedColor.r}, {pickedColor.g}, {pickedColor.b})
+                    </p>
+                    <p className="text-xs font-mono text-neutral-500">
+                      {formatHsl(pickedColor.r, pickedColor.g, pickedColor.b)}
+                    </p>
+                  </div>
+                  <button onClick={copyPickedColor} className="btn-icon">
+                    <Copy className="h-4 w-4" strokeWidth={1.5} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <span style={{ fontSize: "var(--text-sm)", color: "var(--text-tertiary)" }}>
+                {t("label.eyedropper_hint")}
+              </span>
+            )}
+          </>
+        )}
+      </section>
     </div>
   );
 }
