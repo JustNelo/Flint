@@ -424,5 +424,10 @@
 
   "etabli.material": "Material",
   "etabli.results": "Results",
-  "etabli.settings": "Settings"
+  "etabli.settings": "Settings",
+
+  "label.qr_preview": "Preview",
+  "action.save_qr": "Save PNG",
+  "action.copy_image": "Copy",
+  "toast.qr_copied": "QR code copied to clipboard"
 }
