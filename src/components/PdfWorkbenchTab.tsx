@@ -20,11 +20,13 @@ import {
   Stamp,
   Type,
   ImageIcon,
+  Maximize2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { cn, formatSize, safeAssetUrl } from "../lib/utils";
 import { PdfPageGrid } from "./PdfPageGrid";
+import { PdfViewer } from "./PdfViewer";
 import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
 import { ControlsPanel } from "./ControlsPanel";
 import { ActionButton } from "./ui/ActionButton";
@@ -124,6 +126,9 @@ export function PdfWorkbenchTab() {
   // Mode: "workbench" (grid + actions) or "unlock" (standalone)
   const [mode, setMode] = useState<"workbench" | "unlock">("workbench");
   const [panelMode, setPanelMode] = useState<MaterialMode>("material");
+
+  // PDF viewer overlay state
+  const [viewerPdf, setViewerPdf] = useState<{ path: string; page: number } | null>(null);
 
   useEffect(() => {
     if (!loading) setPanelMode(result ? "results" : "material");
@@ -412,7 +417,13 @@ export function PdfWorkbenchTab() {
       )}
 
       {/* Page grid */}
-      <PdfPageGrid pages={pages} loadingThumbnails={loadingThumbnails} onReorder={reorderPages} onRemove={removePage} />
+      <PdfPageGrid
+        pages={pages}
+        loadingThumbnails={loadingThumbnails}
+        onReorder={reorderPages}
+        onRemove={removePage}
+        onOpen={(page) => setViewerPdf({ path: page.sourcePath, page: page.pageNumber })}
+      />
     </div>
   );
 
@@ -466,7 +477,7 @@ export function PdfWorkbenchTab() {
         hasResults={result !== null}
         materialLabel={mode === "workbench" ? t("etabli.pages") : t("pdf_tool.unlock_mode")}
         material={mode === "workbench" ? pageMaterial : unlockMaterial}
-        results={<ResultPanel result={result} t={t} />}
+        results={<ResultPanel result={result} t={t} onView={(p) => setViewerPdf({ path: p, page: 1 })} />}
       />
 
       <ControlsPanel
@@ -901,6 +912,10 @@ export function PdfWorkbenchTab() {
           </>
         )}
       </ControlsPanel>
+
+      {viewerPdf && (
+        <PdfViewer pdfPath={viewerPdf.path} initialPage={viewerPdf.page} onClose={() => setViewerPdf(null)} />
+      )}
     </div>
   );
 }
@@ -910,9 +925,10 @@ export function PdfWorkbenchTab() {
 interface ResultPanelProps {
   result: WorkbenchResult | null;
   t: (key: string, params?: Record<string, string | number>) => string;
+  onView?: (pdfPath: string) => void;
 }
 
-function ResultPanel({ result, t }: ResultPanelProps) {
+function ResultPanel({ result, t, onView }: ResultPanelProps) {
   if (!result) return null;
 
   let successIcon = true;
@@ -1009,6 +1025,18 @@ function ResultPanel({ result, t }: ResultPanelProps) {
       break;
   }
 
+  let outputPdf: string | null = null;
+  switch (result.type) {
+    case "build":
+    case "watermark":
+    case "compress":
+    case "protect":
+      outputPdf = "output_path" in result.data && result.data.output_path ? (result.data.output_path as string) : null;
+      break;
+    default:
+      outputPdf = null;
+  }
+
   return (
     <div className="forge-card p-4 space-y-3">
       <div className="flex items-center justify-between">
@@ -1020,12 +1048,20 @@ function ResultPanel({ result, t }: ResultPanelProps) {
           )}
           <span style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}>{mainText}</span>
         </div>
-        {result.outputDir && (
-          <button onClick={() => revealItemInDir(result.outputDir)} className="btn-ghost">
-            <FolderOpen className="h-3 w-3" strokeWidth={1.5} />
-            {t("label.open_output_folder")}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {outputPdf && onView && (
+            <button onClick={() => onView(outputPdf)} className="btn-ghost">
+              <Maximize2 className="h-3 w-3" strokeWidth={1.5} />
+              {t("action.view")}
+            </button>
+          )}
+          {result.outputDir && (
+            <button onClick={() => revealItemInDir(result.outputDir)} className="btn-ghost">
+              <FolderOpen className="h-3 w-3" strokeWidth={1.5} />
+              {t("label.open_output_folder")}
+            </button>
+          )}
+        </div>
       </div>
 
       {extraContent}

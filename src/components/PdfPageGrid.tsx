@@ -20,6 +20,7 @@ interface PdfPageGridProps {
   loadingThumbnails: boolean;
   onReorder: (pages: BuilderPage[]) => void;
   onRemove: (id: string) => void;
+  onOpen?: (page: BuilderPage) => void;
 }
 
 // Reduce measuring frequency — only measure before dragging starts
@@ -30,7 +31,7 @@ const MEASURING_CONFIG = {
 // Min card width — CSS auto-fill handles column count responsively
 const CARD_MIN_W = 100;
 
-export function PdfPageGrid({ pages, loadingThumbnails, onReorder, onRemove }: PdfPageGridProps) {
+export function PdfPageGrid({ pages, loadingThumbnails, onReorder, onRemove, onOpen }: PdfPageGridProps) {
   const { t } = useT();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -104,7 +105,7 @@ export function PdfPageGrid({ pages, loadingThumbnails, onReorder, onRemove }: P
             }}
           >
             {pages.map((page) => (
-              <PdfPageCard key={page.id} page={page} onRemove={onRemove} />
+              <PdfPageCard key={page.id} page={page} onRemove={onRemove} onOpen={onOpen} />
             ))}
           </div>
         </SortableContext>
