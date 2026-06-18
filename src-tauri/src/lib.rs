@@ -873,6 +873,17 @@ pub fn run() {
             cancel_processing
         ])
         .setup(|app| {
+            // Cap CPU parallelism at ~75% of logical cores. Batch image work
+            // (rayon) stays fast but leaves headroom, so smaller machines don't
+            // overheat or freeze, and cancellation drains faster (fewer encodes
+            // in flight). Best-effort — ignore if the global pool already exists.
+            let cores = std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4);
+            let _ = rayon::ThreadPoolBuilder::new()
+                .num_threads((cores * 3 / 4).max(1))
+                .build_global();
+
             let png_bytes = include_bytes!("../icons/icon.png");
             if let Ok(img) = image::load_from_memory(png_bytes) {
                 let rgba = img.to_rgba8();
