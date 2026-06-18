@@ -1,12 +1,12 @@
 [package]
-name = "rustine"
+name = "flint"
 version = "2.2.0"
-description = "Rust-ine - Desktop image compression & PDF extraction tool"
+description = "Flint - Desktop image compression & PDF extraction tool"
 authors = ["Léon Gallet"]
 edition = "2021"
 
 [lib]
-name = "rustine_lib"
+name = "flint_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
