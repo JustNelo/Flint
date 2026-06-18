@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { I18nProvider } from "./i18n/i18n";
 import { WorkspaceProvider } from "./hooks/useWorkspace";
+import { ChainHandoffProvider } from "./hooks/useChainHandoff";
 import App from "./App";
 
 function RootApp() {
@@ -12,7 +13,9 @@ function RootApp() {
   return (
     <I18nProvider>
       <WorkspaceProvider>
-        <App />
+        <ChainHandoffProvider>
+          <App />
+        </ChainHandoffProvider>
       </WorkspaceProvider>
     </I18nProvider>
   );

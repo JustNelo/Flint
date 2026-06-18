@@ -126,7 +126,7 @@ export function WatermarkTab() {
             <ImageGrid files={files} onReorder={reorderFiles} onRemove={removeFile} onClear={handleClearFiles} />
           </div>
         }
-        results={<ResultsBanner results={results} total={files.length} outputDir={lastOutputDir} />}
+        results={<ResultsBanner results={results} total={files.length} outputDir={lastOutputDir} sourceTab="watermark" />}
       />
 
       <ControlsPanel

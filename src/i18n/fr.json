@@ -266,6 +266,7 @@
   "toast.rename_failed": "Le renommage du fichier de sortie a échoué.",
   "toast.file_open_failed": "Impossible d'ouvrir le fichier sélectionné.",
   "label.open_output_folder": "Ouvrir le dossier",
+  "chain.next": "Et maintenant",
 
   "preset.1080p": "1080p",
   "preset.4k": "4K",

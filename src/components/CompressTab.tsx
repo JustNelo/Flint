@@ -11,6 +11,7 @@ import { ControlsPanel } from "./ControlsPanel";
 import { Slider } from "./ui/Slider";
 import { useFileSelection } from "../hooks/useFileSelection";
 import { useWorkspace } from "../hooks/useWorkspace";
+import { useChainHandoff } from "../hooks/useChainHandoff";
 import { usePersistedState } from "../hooks/usePersistedState";
 import { useT } from "../i18n/i18n";
 import type { BatchProgress, ProcessingResult } from "../types";
@@ -21,6 +22,13 @@ export function CompressTab() {
   const { t } = useT();
   const { files, addFiles, removeFile, clearFiles, reorderFiles } = useFileSelection();
   const { getOutputDir } = useWorkspace();
+  const { consumeChain } = useChainHandoff();
+  // Load files handed off from a chained tool on mount.
+  useEffect(() => {
+    const chained = consumeChain("compress");
+    if (chained && chained.length > 0) addFiles(chained);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [format, setFormat] = usePersistedState<CompressFormat>("compress.format", "webp");
   const [quality, setQuality] = usePersistedState("compress.quality", 80);
   const [loading, setLoading] = useState(false);
@@ -105,7 +113,7 @@ export function CompressTab() {
             <ImageGrid files={files} onReorder={reorderFiles} onRemove={removeFile} onClear={handleClearFiles} />
           </div>
         }
-        results={<ResultsBanner results={results} total={files.length} outputDir={lastOutputDir} />}
+        results={<ResultsBanner results={results} total={files.length} outputDir={lastOutputDir} sourceTab="compress" />}
       />
 
       <ControlsPanel

@@ -266,6 +266,7 @@
   "toast.rename_failed": "Could not rename the output file.",
   "toast.file_open_failed": "Could not open the selected file.",
   "label.open_output_folder": "Open folder",
+  "chain.next": "And now",
 
   "preset.1080p": "1080p",
   "preset.4k": "4K",

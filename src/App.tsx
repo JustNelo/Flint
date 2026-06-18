@@ -48,6 +48,7 @@ const OnboardingModal = lazy(() => import("./components/OnboardingModal").then((
 import { UpdateBanner } from "./components/UpdateBanner";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useAutoUpdate } from "./hooks/useAutoUpdate";
+import { useChainHandoff } from "./hooks/useChainHandoff";
 import { useT } from "./i18n/i18n";
 import type { TabId } from "./types";
 import "./App.css";
@@ -166,6 +167,7 @@ function App() {
     install: installUpdate,
     dismiss: dismissUpdate,
   } = useAutoUpdate();
+  const { pending } = useChainHandoff();
   const [appVersion, setAppVersion] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("compress");
   const [isLoading, setIsLoading] = useState(true);
@@ -198,6 +200,12 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // Chain handoff: when a tool requests chaining its output into another tool,
+  // switch to that tool — it consumes the handed-off files on mount.
+  useEffect(() => {
+    if (pending) setActiveTab(pending.tab);
+  }, [pending]);
 
   const commandTools = useMemo<CommandTool[]>(
     () =>

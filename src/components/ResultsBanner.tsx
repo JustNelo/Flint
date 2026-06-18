@@ -1,19 +1,27 @@
 import { useMemo, useState, useCallback, memo } from "react";
-import { CheckCircle, AlertCircle, XCircle, ZoomIn, FolderOpen } from "lucide-react";
+import { CheckCircle, AlertCircle, XCircle, ZoomIn, FolderOpen, ArrowRight } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { formatSize, isImage, safeAssetUrl } from "../lib/utils";
 import { useThumbnails } from "../hooks/useThumbnails";
 import { BeforeAfterSlider } from "./ui/BeforeAfterSlider";
 import { useT } from "../i18n/i18n";
-import type { ProcessingResult } from "../types";
+import { useChainHandoff } from "../hooks/useChainHandoff";
+import { compatibleChainTargets } from "../lib/chain";
+import type { ProcessingResult, TabId } from "../types";
 
 interface ResultsBannerProps {
   results: ProcessingResult[];
   total: number;
   outputDir?: string;
+  sourceTab?: TabId;
 }
 
-export const ResultsBanner = memo(function ResultsBanner({ results, total, outputDir }: ResultsBannerProps) {
+export const ResultsBanner = memo(function ResultsBanner({
+  results,
+  total,
+  outputDir,
+  sourceTab,
+}: ResultsBannerProps) {
   const { t } = useT();
   const [previewResult, setPreviewResult] = useState<ProcessingResult | null>(null);
 
@@ -39,6 +47,15 @@ export const ResultsBanner = memo(function ResultsBanner({ results, total, outpu
   // every new result set since a re-run can overwrite the same output path.
   const outputPaths = useMemo(() => results.filter((r) => r.success).map((r) => r.output_path), [results]);
   const thumbs = useThumbnails(outputPaths, true);
+
+  const { requestChain } = useChainHandoff();
+  const chainTargets = useMemo(() => {
+    if (!sourceTab) return [];
+    const exts = Array.from(
+      new Set(outputPaths.map((p) => p.split(".").pop()?.toLowerCase()).filter((e): e is string => !!e)),
+    );
+    return compatibleChainTargets(sourceTab, exts);
+  }, [sourceTab, outputPaths]);
 
   if (results.length === 0) return null;
 
@@ -175,6 +192,30 @@ export const ResultsBanner = memo(function ResultsBanner({ results, total, outpu
                   </span>
                 </div>
               ))}
+          </div>
+        )}
+
+        {succeeded > 0 && chainTargets.length > 0 && (
+          <div
+            className="flex items-center gap-2 flex-wrap"
+            style={{ borderTop: "1px solid var(--bg-border)", paddingTop: 12 }}
+          >
+            <span
+              className="inline-flex items-center gap-1"
+              style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", color: "var(--indigo-core)" }}
+            >
+              {t("chain.next")}
+              <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
+            </span>
+            {chainTargets.map((target) => {
+              const Icon = target.icon;
+              return (
+                <button key={target.id} onClick={() => requestChain(target.id, outputPaths)} className="btn-ghost">
+                  <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  {t(target.labelKey)}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

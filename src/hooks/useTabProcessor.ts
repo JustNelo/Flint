@@ -1,8 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { toast } from "sonner";
 import { useFileSelection } from "./useFileSelection";
 import { useWorkspace } from "./useWorkspace";
+import { useChainHandoff } from "./useChainHandoff";
 import { useT } from "../i18n/i18n";
 import { logError } from "../lib/utils";
 import type { TabId, BatchProgress, ProcessingResult } from "../types";
@@ -21,6 +22,13 @@ export function useTabProcessor({ tabId, command }: UseTabProcessorOptions) {
   const { t } = useT();
   const fileSelection = useFileSelection();
   const { getOutputDir } = useWorkspace();
+  const { consumeChain } = useChainHandoff();
+  // Load files handed off from a chained tool on mount.
+  useEffect(() => {
+    const chained = consumeChain(tabId);
+    if (chained && chained.length > 0) fileSelection.addFiles(chained);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ProcessingResult[]>([]);
   const [lastOutputDir, setLastOutputDir] = useState<string>("");
