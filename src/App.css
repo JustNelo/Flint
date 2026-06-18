@@ -163,7 +163,7 @@
   transition: all 100ms ease;
   border: 1px solid var(--bg-border);
   background: var(--bg-elevated);
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 .btn-toggle:hover {
   border-color: var(--indigo-muted);

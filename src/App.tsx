@@ -52,19 +52,6 @@ import { useT } from "./i18n/i18n";
 import type { TabId } from "./types";
 import "./App.css";
 
-// Shown while a lazily-loaded tool chunk resolves. Chunks load from local disk
-// in ~ms, so this is intentionally minimal and rarely visible.
-function TabFallback() {
-  return (
-    <div className="flex items-center justify-center" style={{ minHeight: 240 }}>
-      <div
-        className="animate-pulse"
-        style={{ width: 28, height: 28, borderRadius: 8, background: "var(--bg-elevated)" }}
-      />
-    </div>
-  );
-}
-
 const TAB_EXTENSIONS: Record<TabId, string[]> = {
   compress: ["png", "jpg", "jpeg", "bmp", "ico", "tiff", "tif", "webp"],
   convert: ["png", "jpg", "jpeg", "bmp", "ico", "tiff", "tif", "webp", "gif"],
@@ -247,7 +234,7 @@ function App() {
           />
         }
       >
-        <Suspense fallback={<TabFallback />}>
+        <Suspense fallback={null}>
           {ETABLI_TOOLS.has(activeTab) ? (
             <div>
               <ToolHeader title={t(labelKeyFor(activeTab))} description={t(descKeyFor(activeTab))} />

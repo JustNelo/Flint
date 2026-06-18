@@ -698,13 +698,11 @@ export function PdfWorkbenchTab() {
                     {t("pdf_tool.compress")}
                     <div
                       className="ml-auto h-4 w-7 rounded-full transition-all"
-                      style={{ background: ppCompress ? "var(--indigo-core)" : "var(--bg-overlay)" }}
+                      style={{ background: ppCompress ? "var(--indigo-core)" : "var(--bg-border)" }}
                     >
                       <div
-                        className={cn(
-                          "h-3 w-3 rounded-full mt-0.5 transition-all",
-                          ppCompress ? "ml-3.5 bg-white" : "ml-0.5",
-                        )}
+                        className={cn("h-3 w-3 rounded-full mt-0.5 transition-all", ppCompress ? "ml-3.5" : "ml-0.5")}
+                        style={{ background: ppCompress ? "#fff" : "var(--text-tertiary)" }}
                       />
                     </div>
                   </button>
@@ -733,13 +731,11 @@ export function PdfWorkbenchTab() {
                     {t("pdf_tool.protect")}
                     <div
                       className="ml-auto h-4 w-7 rounded-full transition-all"
-                      style={{ background: ppProtect ? "var(--indigo-core)" : "var(--bg-overlay)" }}
+                      style={{ background: ppProtect ? "var(--indigo-core)" : "var(--bg-border)" }}
                     >
                       <div
-                        className={cn(
-                          "h-3 w-3 rounded-full mt-0.5 transition-all",
-                          ppProtect ? "ml-3.5 bg-white" : "ml-0.5",
-                        )}
+                        className={cn("h-3 w-3 rounded-full mt-0.5 transition-all", ppProtect ? "ml-3.5" : "ml-0.5")}
+                        style={{ background: ppProtect ? "#fff" : "var(--text-tertiary)" }}
                       />
                     </div>
                   </button>
