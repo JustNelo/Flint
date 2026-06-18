@@ -173,9 +173,9 @@ pub fn compress_to_jpeg(
     )
 }
 
-/// AVIF encode speed (1 = slowest/smallest … 10 = fastest/largest). 6 balances
-/// encode time against file size for batch use.
-const AVIF_SPEED: u8 = 6;
+/// AVIF encode speed (1 = slowest/smallest … 10 = fastest/largest). 8 keeps the
+/// CPU cost manageable; rav1e at lower speeds is brutally heavy on batches.
+const AVIF_SPEED: u8 = 8;
 
 pub fn compress_to_avif(
     input_paths: Vec<String>,
@@ -186,28 +186,45 @@ pub fn compress_to_avif(
 ) -> BatchProgress {
     let quality = quality.clamp(1, 100);
 
-    batch_process(
-        &input_paths,
-        &output_dir,
-        &app_handle,
-        &cancel,
-        |input_path, out_dir| {
-            let img = load_image(input_path)?;
-            let rgba = img.to_rgba8(); // AVIF supports alpha
+    let run = || {
+        batch_process(
+            &input_paths,
+            &output_dir,
+            &app_handle,
+            &cancel,
+            |input_path, out_dir| {
+                let img = load_image(input_path)?;
+                let rgba = img.to_rgba8(); // AVIF supports alpha
 
-            let stem = file_stem(input_path);
-            let output_path = out_dir.join(format!("{}-compressed.avif", stem));
+                let stem = file_stem(input_path);
+                let output_path = out_dir.join(format!("{}-compressed.avif", stem));
 
-            let mut buf: Vec<u8> = Vec::new();
-            rgba.write_with_encoder(image::codecs::avif::AvifEncoder::new_with_speed_quality(
-                &mut buf, AVIF_SPEED, quality,
-            ))
-            .map_err(|e| format!("Cannot encode AVIF: {}", e))?;
-            fs::write(&output_path, &buf).map_err(|e| format!("Cannot write AVIF file: {}", e))?;
+                let mut buf: Vec<u8> = Vec::new();
+                rgba.write_with_encoder(image::codecs::avif::AvifEncoder::new_with_speed_quality(
+                    &mut buf, AVIF_SPEED, quality,
+                ))
+                .map_err(|e| format!("Cannot encode AVIF: {}", e))?;
+                fs::write(&output_path, &buf)
+                    .map_err(|e| format!("Cannot write AVIF file: {}", e))?;
 
-            Ok((output_path.to_string_lossy().to_string(), None))
-        },
-    )
+                Ok((output_path.to_string_lossy().to_string(), None))
+            },
+        )
+    };
+
+    // rav1e is far heavier than the other encoders, so AVIF runs on its own
+    // small pool (~quarter of cores) — it cannot peg the CPU to thermal limits,
+    // and a cancel drains quickly since few encodes are ever in flight.
+    let cores = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    match rayon::ThreadPoolBuilder::new()
+        .num_threads((cores / 4).max(1))
+        .build()
+    {
+        Ok(pool) => pool.install(run),
+        Err(_) => run(),
+    }
 }
 
 pub fn convert_images(
