@@ -3,6 +3,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { logError } from "../lib/utils";
 import type { ImageThumbnail } from "../types";
 
+// A single backend call decodes every path it receives at once, so the queue is
+// drained one bounded chunk at a time — an unbounded batch (e.g. a fast scroll
+// through a 1000-image grid) would otherwise spike memory.
+const THUMB_CHUNK_SIZE = 50;
+
 /**
  * On-demand thumbnail resolver for large grids. Instead of generating every
  * thumbnail up front, it only fetches the paths the caller
@@ -26,21 +31,34 @@ export function useLazyThumbnails(resetKey: unknown): {
   const requestedRef = useRef<Set<string>>(new Set());
   const queueRef = useRef<string[]>([]);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const drainingRef = useRef(false);
   const [thumbs, setThumbs] = useState<Map<string, string | null>>(new Map());
 
   useEffect(() => {
     cacheRef.current = new Map();
     requestedRef.current = new Set();
     queueRef.current = [];
+    drainingRef.current = false;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     setThumbs(new Map());
   }, [resetKey]);
 
   useEffect(() => () => void (timerRef.current && clearTimeout(timerRef.current)), []);
 
+  // Drain at most THUMB_CHUNK_SIZE paths per backend call; when the call
+  // returns, immediately start the next chunk if more were queued meanwhile.
+  // This keeps peak memory flat and the grid responsive on large libraries.
   const flush = useCallback(() => {
-    const batch = queueRef.current;
-    queueRef.current = [];
-    if (batch.length === 0) return;
+    timerRef.current = null;
+    const batch = queueRef.current.splice(0, THUMB_CHUNK_SIZE);
+    if (batch.length === 0) {
+      drainingRef.current = false;
+      return;
+    }
+    drainingRef.current = true;
     invoke<ImageThumbnail[]>("generate_image_thumbnails", { inputPaths: batch })
       .then((results) => {
         for (const r of results) {
@@ -48,7 +66,14 @@ export function useLazyThumbnails(resetKey: unknown): {
         }
         setThumbs(new Map(cacheRef.current));
       })
-      .catch((err) => logError("thumbnails:lazy", err));
+      .catch((err) => logError("thumbnails:lazy", err))
+      .finally(() => {
+        if (queueRef.current.length > 0) {
+          flush();
+        } else {
+          drainingRef.current = false;
+        }
+      });
   }, []);
 
   const request = useCallback(
@@ -61,8 +86,10 @@ export function useLazyThumbnails(resetKey: unknown): {
           added = true;
         }
       }
-      if (added) {
-        if (timerRef.current) clearTimeout(timerRef.current);
+      // If a drain is already running, the new paths are picked up by the next
+      // chunk. Otherwise debounce a fresh cycle (coalesces a burst of observer
+      // callbacks into one initial batch).
+      if (added && !drainingRef.current && !timerRef.current) {
         timerRef.current = setTimeout(flush, 80);
       }
     },
