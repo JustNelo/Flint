@@ -11,6 +11,7 @@ import { ControlsPanel } from "./ControlsPanel";
 import { useFileSelection } from "../hooks/useFileSelection";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { getFileName, logError } from "../lib/utils";
+import { applyRenamePattern } from "../lib/renamePattern";
 import { useT } from "../i18n/i18n";
 
 interface RenameEntry {
@@ -57,22 +58,7 @@ export function BulkRenameTab() {
     const today = new Date().toISOString().slice(0, 10);
     return files.slice(0, 5).map((file, i) => {
       const fullName = getFileName(file);
-      const dotIdx = fullName.lastIndexOf(".");
-      const stem = dotIdx > 0 ? fullName.slice(0, dotIdx) : fullName;
-      const ext = dotIdx > 0 ? fullName.slice(dotIdx + 1) : "";
-      const idx = startIndex + i;
-
-      let newName = pattern
-        .replace(/\{name\}/g, stem)
-        .replace(/\{index\}/g, String(idx).padStart(3, "0"))
-        .replace(/\{date\}/g, today)
-        .replace(/\{ext\}/g, ext);
-
-      if (!newName.includes(".") && ext) {
-        newName = `${newName}.${ext}`;
-      }
-
-      return { original: fullName, preview: newName };
+      return { original: fullName, preview: applyRenamePattern(fullName, pattern, startIndex + i, today) };
     });
   }, [files, pattern, startIndex]);
 

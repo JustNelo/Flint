@@ -929,6 +929,35 @@ pub fn unlock_pdf(
 mod tests {
     use super::*;
 
+    // --- is_safely_recompressible ---
+
+    #[test]
+    fn is_safely_recompressible_rejects_unsafe_dicts() {
+        let mut smask = lopdf::Dictionary::new();
+        smask.set("ColorSpace", lopdf::Object::Name(b"DeviceRGB".to_vec()));
+        smask.set("BitsPerComponent", 8i64);
+        smask.set("SMask", 1i64);
+        assert!(!is_safely_recompressible(&smask));
+
+        let mut deep = lopdf::Dictionary::new();
+        deep.set("ColorSpace", lopdf::Object::Name(b"DeviceRGB".to_vec()));
+        deep.set("BitsPerComponent", 4i64);
+        assert!(!is_safely_recompressible(&deep));
+
+        let mut indexed = lopdf::Dictionary::new();
+        indexed.set("ColorSpace", lopdf::Object::Name(b"Indexed".to_vec()));
+        indexed.set("BitsPerComponent", 8i64);
+        assert!(!is_safely_recompressible(&indexed));
+    }
+
+    #[test]
+    fn is_safely_recompressible_accepts_plain_8bit_rgb() {
+        let mut ok = lopdf::Dictionary::new();
+        ok.set("ColorSpace", lopdf::Object::Name(b"DeviceRGB".to_vec()));
+        ok.set("BitsPerComponent", 8i64);
+        assert!(is_safely_recompressible(&ok));
+    }
+
     // --- pad_password ---
 
     #[test]

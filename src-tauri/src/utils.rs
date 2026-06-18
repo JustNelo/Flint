@@ -247,6 +247,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn deep_clone_remaps_references_and_breaks_cycles() {
+        let mut src = lopdf::Document::with_version("1.7");
+        let child = src.add_object(lopdf::Object::Dictionary(lopdf::Dictionary::new()));
+        let mut parent_dict = lopdf::Dictionary::new();
+        parent_dict.set("Kid", lopdf::Object::Reference(child));
+        let parent = src.add_object(lopdf::Object::Dictionary(parent_dict));
+        // Back-reference child -> parent to exercise the cycle breaker.
+        if let Ok(lopdf::Object::Dictionary(d)) = src.get_object_mut(child) {
+            d.set("Back", lopdf::Object::Reference(parent));
+        }
+
+        let mut dest = lopdf::Document::with_version("1.7");
+        let mut visited: std::collections::HashMap<lopdf::ObjectId, lopdf::ObjectId> =
+            std::collections::HashMap::new();
+        let new_parent = deep_clone_object(&mut dest, &src, parent, &mut visited).unwrap();
+
+        assert!(dest.get_object(new_parent).is_ok());
+        assert!(visited.contains_key(&parent));
+        assert!(visited.contains_key(&child));
+    }
+
+    #[test]
     fn file_stem_unix_path() {
         assert_eq!(file_stem("/home/user/photo.jpg"), "photo");
         assert_eq!(file_stem("/home/user/README"), "README");
