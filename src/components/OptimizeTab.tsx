@@ -54,7 +54,9 @@ export function OptimizeTab() {
             <ImageGrid files={files} onReorder={reorderFiles} onRemove={removeFile} onClear={handleClearFiles} />
           </div>
         }
-        results={<ResultsBanner results={results} total={files.length} outputDir={lastOutputDir} sourceTab="optimize" />}
+        results={
+          <ResultsBanner results={results} total={files.length} outputDir={lastOutputDir} sourceTab="optimize" />
+        }
       />
 
       <ControlsPanel

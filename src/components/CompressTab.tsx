@@ -69,8 +69,7 @@ export function CompressTab() {
     setLastOutputDir(outputDir);
 
     try {
-      const command =
-        format === "webp" ? "compress_webp" : format === "jpeg" ? "compress_jpeg" : "compress_avif";
+      const command = format === "webp" ? "compress_webp" : format === "jpeg" ? "compress_jpeg" : "compress_avif";
       const result = await invoke<BatchProgress>(command, {
         inputPaths: files,
         quality,
@@ -113,7 +112,9 @@ export function CompressTab() {
             <ImageGrid files={files} onReorder={reorderFiles} onRemove={removeFile} onClear={handleClearFiles} />
           </div>
         }
-        results={<ResultsBanner results={results} total={files.length} outputDir={lastOutputDir} sourceTab="compress" />}
+        results={
+          <ResultsBanner results={results} total={files.length} outputDir={lastOutputDir} sourceTab="compress" />
+        }
       />
 
       <ControlsPanel

@@ -21,7 +21,16 @@ interface ImageGridCardProps {
 }
 
 export const ImageGridCard = memo(
-  function ImageGridCard({ id, filePath, onRemove, index, onPreview, onInfo, thumbnailSrc, onObserve }: ImageGridCardProps) {
+  function ImageGridCard({
+    id,
+    filePath,
+    onRemove,
+    index,
+    onPreview,
+    onInfo,
+    thumbnailSrc,
+    onObserve,
+  }: ImageGridCardProps) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
     const style = {

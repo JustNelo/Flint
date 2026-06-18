@@ -16,12 +16,7 @@ interface ResultsBannerProps {
   sourceTab?: TabId;
 }
 
-export const ResultsBanner = memo(function ResultsBanner({
-  results,
-  total,
-  outputDir,
-  sourceTab,
-}: ResultsBannerProps) {
+export const ResultsBanner = memo(function ResultsBanner({ results, total, outputDir, sourceTab }: ResultsBannerProps) {
   const { t } = useT();
   const [previewResult, setPreviewResult] = useState<ProcessingResult | null>(null);
 
@@ -180,7 +175,11 @@ export const ResultsBanner = memo(function ResultsBanner({
                       style={{ background: "var(--bg-elevated)" }}
                       aria-hidden
                     >
-                      <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--text-tertiary)" }} strokeWidth={1.5} />
+                      <Loader2
+                        className="h-4 w-4 animate-spin"
+                        style={{ color: "var(--text-tertiary)" }}
+                        strokeWidth={1.5}
+                      />
                     </div>
                   ) : (
                     <div className="h-full w-full flex items-center justify-center">

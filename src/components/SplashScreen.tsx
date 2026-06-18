@@ -16,7 +16,14 @@ export function SplashScreen({ visible }: SplashScreenProps) {
     >
       <div className="splash-logo">
         <div className="splash-glow" />
-        <svg width={104} height={104} viewBox="0 0 72 72" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <svg
+          width={104}
+          height={104}
+          viewBox="0 0 72 72"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+        >
           {/* Shadowed face — fades in */}
           <polygon className="splash-shadow" points="28,20 42,38 50,56 22,60 14,32" fill="var(--flint-bg-elevated)" />
           {/* Lit face — fades in */}

@@ -58,11 +58,7 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
               style={{
                 width: isActive ? 8 : 6,
                 height: isActive ? 8 : 6,
-                background: isActive
-                  ? "var(--indigo-core)"
-                  : isCompleted
-                    ? "var(--indigo-muted)"
-                    : "var(--bg-border)",
+                background: isActive ? "var(--indigo-core)" : isCompleted ? "var(--indigo-muted)" : "var(--bg-border)",
               }}
             />
             {i < total - 1 && (

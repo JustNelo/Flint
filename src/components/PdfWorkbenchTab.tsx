@@ -334,12 +334,7 @@ export function PdfWorkbenchTab() {
       )}
 
       {/* Page grid */}
-      <PdfPageGrid
-        pages={pages}
-        loadingThumbnails={loadingThumbnails}
-        onReorder={reorderPages}
-        onRemove={removePage}
-      />
+      <PdfPageGrid pages={pages} loadingThumbnails={loadingThumbnails} onReorder={reorderPages} onRemove={removePage} />
     </div>
   );
 

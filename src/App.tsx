@@ -40,11 +40,15 @@ const SpriteSheetTab = lazy(() => import("./components/SpriteSheetTab").then((m)
 const Base64Tab = lazy(() => import("./components/Base64Tab").then((m) => ({ default: m.Base64Tab })));
 const QrCodeTab = lazy(() => import("./components/QrCodeTab").then((m) => ({ default: m.QrCodeTab })));
 const BulkRenameTab = lazy(() => import("./components/BulkRenameTab").then((m) => ({ default: m.BulkRenameTab })));
-const SvgRasterizeTab = lazy(() => import("./components/SvgRasterizeTab").then((m) => ({ default: m.SvgRasterizeTab })));
+const SvgRasterizeTab = lazy(() =>
+  import("./components/SvgRasterizeTab").then((m) => ({ default: m.SvgRasterizeTab })),
+);
 import { GlobalProgressBar } from "./components/GlobalProgressBar";
 import { SplashScreen } from "./components/SplashScreen";
 const SettingsPanel = lazy(() => import("./components/SettingsPanel").then((m) => ({ default: m.SettingsPanel })));
-const OnboardingModal = lazy(() => import("./components/OnboardingModal").then((m) => ({ default: m.OnboardingModal })));
+const OnboardingModal = lazy(() =>
+  import("./components/OnboardingModal").then((m) => ({ default: m.OnboardingModal })),
+);
 import { UpdateBanner } from "./components/UpdateBanner";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useAutoUpdate } from "./hooks/useAutoUpdate";

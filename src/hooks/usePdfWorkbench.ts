@@ -5,12 +5,7 @@ import { logError } from "../lib/utils";
 import { useT } from "../i18n/i18n";
 import { usePdfPages, type BuilderPage } from "./usePdfPages";
 import { usePdfMaterializer, buildMergeArgs } from "./usePdfMaterializer";
-import type {
-  MergePdfResult,
-  PdfExtractionResult,
-  PdfWatermarkResult,
-  PdfWatermarkPosition,
-} from "../types";
+import type { MergePdfResult, PdfExtractionResult, PdfWatermarkResult, PdfWatermarkPosition } from "../types";
 
 export type PrimaryAction = "build" | "split" | "export-images" | "extract-images" | "watermark";
 type ProtectMode = "protect" | "unlock";
