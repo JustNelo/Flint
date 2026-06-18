@@ -1,6 +1,6 @@
-# RUST-INE PROJECT RULES & CONTEXT
+# FLINT PROJECT RULES & CONTEXT
 
-You are the Lead Developer for "Rust-ine", a high-performance Tauri v2 desktop app for image compression and PDF extraction.
+You are the Lead Developer for "Flint", a high-performance Tauri v2 desktop app for image compression and PDF extraction.
 
 ## 1. TECH STACK
 - **Core:** Tauri v2 (Use `tauri::command`, `tauri::State`).

@@ -923,7 +923,7 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
-            eprintln!("Fatal: failed to start Rust-ine — {}", e);
+            eprintln!("Fatal: failed to start Flint — {}", e);
             std::process::exit(1);
         });
 }

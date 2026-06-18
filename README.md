@@ -6,8 +6,8 @@
 
 Batch image processing, PDF tools, and developer utilities in one fast desktop app.
 
-[![Build & Release](https://github.com/JustNelo/Rust-ine/actions/workflows/release.yml/badge.svg)](https://github.com/JustNelo/Rust-ine/actions/workflows/release.yml)
-[![Version](https://img.shields.io/github/v/tag/JustNelo/Rust-ine?label=version&color=e8572a)](https://github.com/JustNelo/Rust-ine/releases/latest)
+[![CI](https://github.com/JustNelo/Flint/actions/workflows/ci.yml/badge.svg)](https://github.com/JustNelo/Flint/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/tag/JustNelo/Flint?label=version&color=e8572a)](https://github.com/JustNelo/Flint/releases/latest)
 [![License](https://img.shields.io/badge/license-Source%20Available-555)](#license)
 
 </div>
@@ -18,7 +18,7 @@ Flint is a Tauri v2 desktop application that bundles common image, PDF, and deve
 
 ## Download
 
-Get the latest installer from the [Releases page](https://github.com/JustNelo/Rust-ine/releases/latest).
+Get the latest installer from the [Releases page](https://github.com/JustNelo/Flint/releases/latest).
 
 | Platform | Format |
 | :--- | :--- |
