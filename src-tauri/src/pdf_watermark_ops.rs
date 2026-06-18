@@ -761,3 +761,182 @@ fn build_image_watermark_ops(
         Operation::new("Q", vec![]),
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper: extract f32 from an Object::Real / Object::Integer operand.
+    fn operand_f32(obj: &Object) -> Option<f32> {
+        match obj {
+            Object::Real(f) => Some(*f),
+            Object::Integer(i) => Some(*i as f32),
+            _ => None,
+        }
+    }
+
+    /// Find the first operation whose operator matches `op`.
+    fn find_op<'a>(ops: &'a [Operation], op: &str) -> Option<&'a Operation> {
+        ops.iter().find(|o| o.operator == op)
+    }
+
+    #[test]
+    fn hex_to_rgb_f32_parses_and_falls_back() {
+        // Pure white -> all channels 1.0
+        let (r, g, b) = hex_to_rgb_f32("#ffffff");
+        assert!((r - 1.0).abs() < 1e-6);
+        assert!((g - 1.0).abs() < 1e-6);
+        assert!((b - 1.0).abs() < 1e-6);
+
+        // Pure red -> (1,0,0)
+        let (r, g, b) = hex_to_rgb_f32("ff0000");
+        assert!((r - 1.0).abs() < 1e-6);
+        assert!(g.abs() < 1e-6);
+        assert!(b.abs() < 1e-6);
+
+        // Mid grey 0x808080 -> 128/255
+        let (r, _, _) = hex_to_rgb_f32("#808080");
+        assert!((r - 128.0 / 255.0).abs() < 1e-6);
+
+        // Invalid input -> light grey fallback (179/255 each)
+        let (r, g, b) = hex_to_rgb_f32("not-a-color");
+        let expected = 179.0 / 255.0;
+        assert!((r - expected).abs() < 1e-6);
+        assert!((g - expected).abs() < 1e-6);
+        assert!((b - expected).abs() < 1e-6);
+    }
+
+    #[test]
+    fn obj_to_f32_handles_numeric_and_rejects_others() {
+        assert_eq!(obj_to_f32(&Object::Integer(842)), Some(842.0));
+        assert_eq!(obj_to_f32(&Object::Real(595.5)), Some(595.5));
+        assert_eq!(obj_to_f32(&Object::Null), None);
+        assert_eq!(obj_to_f32(&Object::Boolean(true)), None);
+        assert_eq!(obj_to_f32(&Object::Name(b"MediaBox".to_vec())), None);
+    }
+
+    #[test]
+    fn text_watermark_top_left_positions_correctly() {
+        let page_w = 595.0_f32;
+        let page_h = 842.0_f32;
+        let font_size = 24.0_f32;
+        let text_height = font_size;
+        let text_width = font_size * "WM".len() as f32 * 0.6;
+
+        let ops = build_text_watermark_ops(
+            "WM",
+            "top-left",
+            font_size,
+            text_width,
+            text_height,
+            page_w,
+            page_h,
+            0.0,
+            0.0,
+            0.0,
+        );
+
+        // Single-position mode emits the full q/gs/BT/Tf/rg/Td/Tj/ET/Q sequence.
+        assert_eq!(ops.len(), 9);
+        assert_eq!(ops[0].operator, "q");
+        assert_eq!(ops.last().unwrap().operator, "Q");
+        // Opacity is applied through the shared ext-graphics-state.
+        assert!(find_op(&ops, "gs").is_some());
+
+        // The font must be set to the watermark font at the requested size.
+        let tf = find_op(&ops, "Tf").expect("Tf op present");
+        assert_eq!(tf.operands.len(), 2);
+        assert!(matches!(&tf.operands[0], Object::Name(n) if n == b"WmF1"));
+        assert_eq!(operand_f32(&tf.operands[1]), Some(font_size));
+
+        // top-left => Td at (margin, page_h - margin - text_height).
+        let td = find_op(&ops, "Td").expect("Td op present");
+        let x = operand_f32(&td.operands[0]).unwrap();
+        let y = operand_f32(&td.operands[1]).unwrap();
+        assert!((x - WATERMARK_MARGIN_PT).abs() < 1e-4);
+        assert!((y - (page_h - WATERMARK_MARGIN_PT - text_height)).abs() < 1e-4);
+
+        // The drawn string is the input text.
+        let tj = find_op(&ops, "Tj").expect("Tj op present");
+        assert!(matches!(&tj.operands[0], Object::String(bytes, _) if bytes == b"WM"));
+    }
+
+    #[test]
+    fn text_watermark_diagonal_uses_rotation_matrix() {
+        let page_w = 600.0_f32;
+        let page_h = 800.0_f32;
+        let font_size = 30.0_f32;
+        let text_height = font_size;
+        let text_width = 120.0_f32;
+
+        let ops = build_text_watermark_ops(
+            "DRAFT",
+            "diagonal",
+            font_size,
+            text_width,
+            text_height,
+            page_w,
+            page_h,
+            0.1,
+            0.2,
+            0.3,
+        );
+
+        // Diagonal mode uses a text matrix (Tm), not a plain Td translation.
+        assert!(find_op(&ops, "Td").is_none());
+        let tm = find_op(&ops, "Tm").expect("Tm op present");
+        assert_eq!(tm.operands.len(), 6);
+
+        // 45-degree rotation: a == d == cos(45), b == sin(45), c == -sin(45).
+        let cos45 = std::f32::consts::FRAC_PI_4.cos();
+        let sin45 = std::f32::consts::FRAC_PI_4.sin();
+        let a = operand_f32(&tm.operands[0]).unwrap();
+        let b = operand_f32(&tm.operands[1]).unwrap();
+        let c = operand_f32(&tm.operands[2]).unwrap();
+        let d = operand_f32(&tm.operands[3]).unwrap();
+        assert!((a - cos45).abs() < 1e-4);
+        assert!((b - sin45).abs() < 1e-4);
+        assert!((c + sin45).abs() < 1e-4);
+        assert!((d - cos45).abs() < 1e-4);
+
+        // The fill color (rg) reflects the requested RGB.
+        let rg = find_op(&ops, "rg").expect("rg op present");
+        assert!((operand_f32(&rg.operands[0]).unwrap() - 0.1).abs() < 1e-6);
+        assert!((operand_f32(&rg.operands[1]).unwrap() - 0.2).abs() < 1e-6);
+        assert!((operand_f32(&rg.operands[2]).unwrap() - 0.3).abs() < 1e-6);
+    }
+
+    #[test]
+    fn image_watermark_bottom_right_cm_matrix_and_tiling() {
+        let page_w = 500.0_f32;
+        let page_h = 700.0_f32;
+        let draw_w = 100.0_f32;
+        let draw_h = 50.0_f32;
+        let margin = WATERMARK_MARGIN_PT;
+
+        // Single position emits q, gs, cm, Do, Q — verify the shape via find_op.
+        let ops = build_image_watermark_ops("bottom-right", draw_w, draw_h, page_w, page_h, margin);
+        assert_eq!(ops[0].operator, "q");
+        assert_eq!(ops.last().unwrap().operator, "Q");
+
+        // The cm matrix encodes scale (draw_w, draw_h) and placement (x, y).
+        let cm = find_op(&ops, "cm").expect("cm op present");
+        assert_eq!(cm.operands.len(), 6);
+        assert!((operand_f32(&cm.operands[0]).unwrap() - draw_w).abs() < 1e-4);
+        assert!((operand_f32(&cm.operands[3]).unwrap() - draw_h).abs() < 1e-4);
+        // bottom-right => x = page_w - draw_w - margin, y = margin.
+        let x = operand_f32(&cm.operands[4]).unwrap();
+        let y = operand_f32(&cm.operands[5]).unwrap();
+        assert!((x - (page_w - draw_w - margin)).abs() < 1e-4);
+        assert!((y - margin).abs() < 1e-4);
+
+        // The image XObject is invoked exactly once via Do.
+        let do_count = ops.iter().filter(|o| o.operator == "Do").count();
+        assert_eq!(do_count, 1);
+
+        // Tiled mode invokes Do multiple times (a grid of placements).
+        let tiled = build_image_watermark_ops("tiled", draw_w, draw_h, page_w, page_h, margin);
+        let tiled_do = tiled.iter().filter(|o| o.operator == "Do").count();
+        assert!(tiled_do > 1, "tiled mode should place more than one image");
+    }
+}

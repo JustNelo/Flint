@@ -189,3 +189,102 @@ fn build_atlas_json(frames: Vec<(String, AtlasFrame)>) -> String {
     };
     serde_json::to_string_pretty(&atlas).unwrap_or_else(|_| "{}".to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    #[test]
+    fn atlas_json_empty_has_empty_frames_object() {
+        let json = build_atlas_json(Vec::new());
+        let parsed: Value = serde_json::from_str(&json).expect("valid JSON");
+        let frames = parsed.get("frames").expect("frames key present");
+        assert!(frames.is_object(), "frames should be a JSON object");
+        assert_eq!(
+            frames.as_object().unwrap().len(),
+            0,
+            "no frames means empty object"
+        );
+    }
+
+    #[test]
+    fn atlas_json_preserves_frame_geometry() {
+        let frames = vec![
+            (
+                "alpha".to_string(),
+                AtlasFrame {
+                    x: 1,
+                    y: 2,
+                    w: 32,
+                    h: 48,
+                },
+            ),
+            (
+                "beta".to_string(),
+                AtlasFrame {
+                    x: 100,
+                    y: 200,
+                    w: 16,
+                    h: 16,
+                },
+            ),
+        ];
+
+        let json = build_atlas_json(frames);
+        let parsed: Value = serde_json::from_str(&json).expect("valid JSON");
+        let frames = parsed.get("frames").expect("frames key present");
+
+        let alpha = frames.get("alpha").expect("alpha frame present");
+        assert_eq!(alpha.get("x").and_then(Value::as_u64), Some(1));
+        assert_eq!(alpha.get("y").and_then(Value::as_u64), Some(2));
+        assert_eq!(alpha.get("w").and_then(Value::as_u64), Some(32));
+        assert_eq!(alpha.get("h").and_then(Value::as_u64), Some(48));
+
+        let beta = frames.get("beta").expect("beta frame present");
+        assert_eq!(beta.get("x").and_then(Value::as_u64), Some(100));
+        assert_eq!(beta.get("y").and_then(Value::as_u64), Some(200));
+        assert_eq!(beta.get("w").and_then(Value::as_u64), Some(16));
+        assert_eq!(beta.get("h").and_then(Value::as_u64), Some(16));
+    }
+
+    #[test]
+    fn atlas_json_deduplicates_repeated_names() {
+        // AtlasJson stores frames in a HashMap keyed by name, so a repeated
+        // name keeps only one entry (last write wins for HashMap::from_iter).
+        let frames = vec![
+            (
+                "dup".to_string(),
+                AtlasFrame {
+                    x: 0,
+                    y: 0,
+                    w: 8,
+                    h: 8,
+                },
+            ),
+            (
+                "dup".to_string(),
+                AtlasFrame {
+                    x: 5,
+                    y: 5,
+                    w: 9,
+                    h: 9,
+                },
+            ),
+        ];
+
+        let json = build_atlas_json(frames);
+        let parsed: Value = serde_json::from_str(&json).expect("valid JSON");
+        let frames_obj = parsed
+            .get("frames")
+            .and_then(Value::as_object)
+            .expect("frames object");
+
+        assert_eq!(
+            frames_obj.len(),
+            1,
+            "repeated key collapses to a single frame"
+        );
+        assert!(frames_obj.contains_key("dup"));
+    }
+}

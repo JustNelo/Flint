@@ -86,3 +86,128 @@ pub fn extract_palette(image_path: &str, num_colors: usize) -> Result<PaletteRes
         source_path: image_path.to_string(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{Rgba, RgbaImage};
+    use std::path::PathBuf;
+
+    fn temp_png(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("color_ops_{}_{}.png", name, std::process::id()))
+    }
+
+    #[test]
+    fn solid_color_image_leads_palette_with_that_color() {
+        let path = temp_png("solid");
+        // Pure red, fully opaque. After quantization 0xFF -> (0xF0) per channel.
+        let img = RgbaImage::from_pixel(80, 80, Rgba([255, 0, 0, 255]));
+        img.save(&path).expect("save red png");
+
+        let result = extract_palette(path.to_str().unwrap(), 5).expect("extract palette");
+
+        assert_eq!(result.source_path, path.to_str().unwrap());
+        assert!(!result.colors.is_empty(), "expected at least one color");
+
+        let lead = &result.colors[0];
+        // r,g,b are the quantized values: 255 >> 4 << 4 == 240, 0 stays 0.
+        assert_eq!((lead.r, lead.g, lead.b), (240, 0, 0));
+        assert_eq!(lead.hex, "#F00000");
+        // A solid opaque image: the lead color covers ~100% of pixels.
+        assert!(
+            lead.percentage > 99.0,
+            "lead percentage {} should be ~100",
+            lead.percentage
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn fully_transparent_pixels_are_ignored() {
+        let path = temp_png("transparent");
+        // Alpha 0 -> all pixels skipped (a < 128), so no buckets at all.
+        let img = RgbaImage::from_pixel(40, 40, Rgba([10, 20, 30, 0]));
+        img.save(&path).expect("save transparent png");
+
+        let result = extract_palette(path.to_str().unwrap(), 5).expect("extract palette");
+
+        assert!(
+            result.colors.is_empty(),
+            "fully transparent image should yield no colors, got {:?}",
+            result.colors
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn distinct_halves_are_both_extracted_and_not_merged() {
+        let path = temp_png("halves");
+        // Left half red, right half green: far apart in the L1 distance metric
+        // (dr+dg+db well over the 60 merge threshold), so both must survive.
+        let mut img = RgbaImage::from_pixel(80, 80, Rgba([255, 0, 0, 255]));
+        for y in 0..80 {
+            for x in 40..80 {
+                img.put_pixel(x, y, Rgba([0, 255, 0, 255]));
+            }
+        }
+        img.save(&path).expect("save halves png");
+
+        let result = extract_palette(path.to_str().unwrap(), 5).expect("extract palette");
+
+        let has_red = result.colors.iter().any(|c| (c.r, c.g, c.b) == (240, 0, 0));
+        let has_green = result.colors.iter().any(|c| (c.r, c.g, c.b) == (0, 240, 0));
+        assert!(has_red, "expected quantized red in {:?}", result.colors);
+        assert!(has_green, "expected quantized green in {:?}", result.colors);
+
+        // Every reported percentage is rounded to one decimal place.
+        for c in &result.colors {
+            let scaled = c.percentage * 10.0;
+            assert!(
+                (scaled - scaled.round()).abs() < 1e-9,
+                "percentage {} not rounded to 1 decimal",
+                c.percentage
+            );
+        }
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn num_colors_caps_returned_palette_length() {
+        let path = temp_png("cap");
+        // Four well-separated colored quadrants; request only 2.
+        let mut img = RgbaImage::from_pixel(80, 80, Rgba([255, 0, 0, 255]));
+        for y in 0..80 {
+            for x in 0..80 {
+                let c = match (x < 40, y < 40) {
+                    (true, true) => Rgba([255, 0, 0, 255]),
+                    (false, true) => Rgba([0, 255, 0, 255]),
+                    (true, false) => Rgba([0, 0, 255, 255]),
+                    (false, false) => Rgba([255, 255, 0, 255]),
+                };
+                img.put_pixel(x, y, c);
+            }
+        }
+        img.save(&path).expect("save quadrants png");
+
+        let result = extract_palette(path.to_str().unwrap(), 2).expect("extract palette");
+        assert!(
+            result.colors.len() <= 2,
+            "requested 2 colors, got {}",
+            result.colors.len()
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn missing_file_returns_error() {
+        let path = temp_png("does_not_exist");
+        let _ = std::fs::remove_file(&path); // ensure absent
+        let err = extract_palette(path.to_str().unwrap(), 5)
+            .expect_err("opening a missing file must fail");
+        assert!(err.contains("Cannot open"), "unexpected error: {}", err);
+    }
+}

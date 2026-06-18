@@ -139,3 +139,81 @@ pub fn create_gif(
     result.output_path = output_path.to_string_lossy().to_string();
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    // `create_gif` requires a live `&tauri::AppHandle` (it calls
+    // `emit_progress_simple`, which invokes `app_handle.emit(...)`), so the GIF
+    // encoding path itself cannot be exercised in a unit test. The remaining
+    // deterministic, load-bearing surface is the `AnimationResult` serde
+    // contract: the React frontend reads `output_path`, `frame_count`,
+    // `format`, and `errors` by these exact snake_case names, so a rename would
+    // silently break the UI.
+
+    #[test]
+    fn animation_result_serializes_with_frontend_field_names() {
+        let result = AnimationResult {
+            output_path: "/tmp/out/animation.gif".to_string(),
+            frame_count: 3,
+            format: "gif".to_string(),
+            errors: vec!["frame 2 failed".to_string()],
+        };
+
+        let json = serde_json::to_string(&result).expect("serialize AnimationResult");
+        let value: Value = serde_json::from_str(&json).expect("parse serialized JSON");
+
+        // Exact field names the frontend (AnimationTab.tsx) depends on.
+        assert_eq!(value["output_path"], "/tmp/out/animation.gif");
+        assert_eq!(value["frame_count"], 3);
+        assert_eq!(value["format"], "gif");
+        assert_eq!(value["errors"][0], "frame 2 failed");
+
+        // No camelCase aliases should leak in.
+        assert!(value.get("frameCount").is_none());
+        assert!(value.get("outputPath").is_none());
+
+        let obj = value.as_object().expect("JSON object");
+        assert_eq!(obj.len(), 4, "exactly four serialized fields");
+    }
+
+    #[test]
+    fn animation_result_round_trips_through_json() {
+        let original = AnimationResult {
+            output_path: "C:\\out\\animation.gif".to_string(),
+            frame_count: 0,
+            format: "gif".to_string(),
+            errors: vec!["No images provided".to_string(), "second error".to_string()],
+        };
+
+        let json = serde_json::to_string(&original).expect("serialize");
+        let decoded: AnimationResult = serde_json::from_str(&json).expect("deserialize");
+
+        assert_eq!(decoded.output_path, original.output_path);
+        assert_eq!(decoded.frame_count, original.frame_count);
+        assert_eq!(decoded.format, original.format);
+        assert_eq!(decoded.errors, original.errors);
+    }
+
+    #[test]
+    fn animation_result_empty_errors_serializes_as_empty_array() {
+        let result = AnimationResult {
+            output_path: String::new(),
+            frame_count: 0,
+            format: "gif".to_string(),
+            errors: Vec::new(),
+        };
+
+        let value: Value =
+            serde_json::from_str(&serde_json::to_string(&result).expect("serialize"))
+                .expect("parse");
+
+        // The frontend checks `res.errors.length === 0`, so errors must be a
+        // JSON array (never null/omitted) even when empty.
+        assert!(value["errors"].is_array());
+        assert_eq!(value["errors"].as_array().expect("array").len(), 0);
+        assert_eq!(value["output_path"], "");
+    }
+}
