@@ -241,6 +241,23 @@ async fn compress_jpeg(
 }
 
 #[tauri::command]
+async fn compress_avif(
+    app_handle: tauri::AppHandle,
+    token: tauri::State<'_, CancellationToken>,
+    input_paths: Vec<String>,
+    quality: u8,
+    output_dir: String,
+) -> Result<BatchProgress, String> {
+    validate_path(&output_dir)?;
+    validate_paths(&input_paths)?;
+    let cancel = arm_cancel_token(&token);
+    run_blocking(move || {
+        image_ops::compress_to_avif(input_paths, quality, output_dir, app_handle, cancel)
+    })
+    .await
+}
+
+#[tauri::command]
 async fn convert_images(
     app_handle: tauri::AppHandle,
     token: tauri::State<'_, CancellationToken>,
@@ -822,6 +839,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             compress_webp,
             compress_jpeg,
+            compress_avif,
             convert_images,
             generate_image_thumbnails,
             extract_pdf_images,

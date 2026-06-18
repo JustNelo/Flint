@@ -15,7 +15,7 @@ import { usePersistedState } from "../hooks/usePersistedState";
 import { useT } from "../i18n/i18n";
 import type { BatchProgress, ProcessingResult } from "../types";
 
-type CompressFormat = "webp" | "jpeg";
+type CompressFormat = "webp" | "jpeg" | "avif";
 
 export function CompressTab() {
   const { t } = useT();
@@ -61,7 +61,8 @@ export function CompressTab() {
     setLastOutputDir(outputDir);
 
     try {
-      const command = format === "webp" ? "compress_webp" : "compress_jpeg";
+      const command =
+        format === "webp" ? "compress_webp" : format === "jpeg" ? "compress_jpeg" : "compress_avif";
       const result = await invoke<BatchProgress>(command, {
         inputPaths: files,
         quality,
@@ -138,7 +139,7 @@ export function CompressTab() {
             {t("label.output_format")}
           </label>
           <div className="flex gap-2">
-            {(["webp", "jpeg"] as CompressFormat[]).map((f) => (
+            {(["webp", "jpeg", "avif"] as CompressFormat[]).map((f) => (
               <button
                 key={f}
                 onClick={() => setFormat(f)}

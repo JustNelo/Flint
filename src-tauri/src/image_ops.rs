@@ -173,6 +173,43 @@ pub fn compress_to_jpeg(
     )
 }
 
+/// AVIF encode speed (1 = slowest/smallest … 10 = fastest/largest). 6 balances
+/// encode time against file size for batch use.
+const AVIF_SPEED: u8 = 6;
+
+pub fn compress_to_avif(
+    input_paths: Vec<String>,
+    quality: u8,
+    output_dir: String,
+    app_handle: tauri::AppHandle,
+    cancel: Arc<AtomicBool>,
+) -> BatchProgress {
+    let quality = quality.clamp(1, 100);
+
+    batch_process(
+        &input_paths,
+        &output_dir,
+        &app_handle,
+        &cancel,
+        |input_path, out_dir| {
+            let img = load_image(input_path)?;
+            let rgba = img.to_rgba8(); // AVIF supports alpha
+
+            let stem = file_stem(input_path);
+            let output_path = out_dir.join(format!("{}-compressed.avif", stem));
+
+            let mut buf: Vec<u8> = Vec::new();
+            rgba.write_with_encoder(image::codecs::avif::AvifEncoder::new_with_speed_quality(
+                &mut buf, AVIF_SPEED, quality,
+            ))
+            .map_err(|e| format!("Cannot encode AVIF: {}", e))?;
+            fs::write(&output_path, &buf).map_err(|e| format!("Cannot write AVIF file: {}", e))?;
+
+            Ok((output_path.to_string_lossy().to_string(), None))
+        },
+    )
+}
+
 pub fn convert_images(
     input_paths: Vec<String>,
     output_format: String,
@@ -195,6 +232,20 @@ pub fn convert_images(
                 "webp" => {
                     let output_path = out_dir.join(format!("{}-converted.webp", stem));
                     write_webp(&img, &output_path, 100.0)?;
+                    output_path.to_string_lossy().to_string()
+                }
+                "avif" => {
+                    let output_path = out_dir.join(format!("{}-converted.avif", stem));
+                    let rgba = img.to_rgba8();
+                    let mut buf: Vec<u8> = Vec::new();
+                    rgba.write_with_encoder(
+                        image::codecs::avif::AvifEncoder::new_with_speed_quality(
+                            &mut buf, AVIF_SPEED, 80,
+                        ),
+                    )
+                    .map_err(|e| format!("Cannot encode AVIF: {}", e))?;
+                    fs::write(&output_path, &buf)
+                        .map_err(|e| format!("Cannot write AVIF: {}", e))?;
                     output_path.to_string_lossy().to_string()
                 }
                 "png" => {

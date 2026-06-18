@@ -30,7 +30,7 @@ export interface PdfExtractionResult {
   errors: string[];
 }
 
-export type OutputFormat = "png" | "jpg" | "webp" | "bmp" | "ico" | "tiff";
+export type OutputFormat = "png" | "jpg" | "webp" | "bmp" | "ico" | "tiff" | "avif";
 
 export type ResizeMode = "exact" | "width" | "height" | "percentage";
 
