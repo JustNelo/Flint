@@ -4,8 +4,8 @@ import { logError } from "../lib/utils";
 import type { ImageThumbnail } from "../types";
 
 /**
- * On-demand thumbnail resolver for large result grids. Unlike {@link useThumbnails}
- * (which generates the whole set up front), this only fetches the paths the caller
+ * On-demand thumbnail resolver for large grids. Instead of generating every
+ * thumbnail up front, it only fetches the paths the caller
  * asks for — wire it to an IntersectionObserver so off-screen tiles never trigger
  * a decode. Newly requested paths are coalesced into one debounced backend call,
  * and the map updates as each batch returns (progressive feedback).

@@ -1,4 +1,4 @@
-import { useCallback, useState, memo } from "react";
+import { useCallback, useState, useRef, useEffect, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { X } from "lucide-react";
 import {
@@ -14,7 +14,7 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, rectSortingStrategy } from "@dnd-kit/sortable";
 import { useT } from "../i18n/i18n";
 import { safeAssetUrl } from "../lib/utils";
-import { useThumbnails } from "../hooks/useThumbnails";
+import { useLazyThumbnails } from "../hooks/useLazyThumbnails";
 import { ImageGridCard } from "./ImageGridCard";
 import { MetadataPanel } from "./MetadataPanel";
 import type { ImageMetadata } from "../types";
@@ -44,8 +44,16 @@ export const ImageGrid = memo(function ImageGrid({ files, onReorder, onRemove, o
     }),
   );
 
-  // Resolve bounded-size thumbnails so cards never decode the full-res original.
-  const thumbs = useThumbnails(files);
+  // Lazily resolve bounded-size thumbnails: a card requests its thumbnail only
+  // once it scrolls near the viewport (observer below), so adding hundreds of
+  // files no longer decodes them all at once.
+  const { thumbs, request } = useLazyThumbnails("input-grid");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const tileEls = useRef<Map<string, HTMLElement>>(new Map());
+  const registerTile = useCallback((path: string, el: HTMLElement | null) => {
+    if (el) tileEls.current.set(path, el);
+    else tileEls.current.delete(path);
+  }, []);
 
   // File paths are unique within the list (addFiles dedupes by path), so they
   // serve as stable DnD ids / React keys — no array index, so removing or
@@ -88,6 +96,25 @@ export const ImageGrid = memo(function ImageGrid({ files, onReorder, onRemove, o
   const closeInfo = useCallback(() => {
     setInfoMetadata(null);
   }, []);
+
+  // Fetch a card's thumbnail only once it scrolls near the viewport.
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || files.length === 0) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .map((e) => (e.target as HTMLElement).dataset.path)
+          .filter((p): p is string => !!p);
+        if (visible.length > 0) request(visible);
+      },
+      { root, rootMargin: "200px 0px", threshold: 0.01 },
+    );
+    tileEls.current.forEach((el) => obs.observe(el));
+    return () => obs.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [files, request]);
 
   if (files.length === 0) return null;
 
@@ -133,6 +160,7 @@ export const ImageGrid = memo(function ImageGrid({ files, onReorder, onRemove, o
         >
           <SortableContext items={files} strategy={rectSortingStrategy}>
             <div
+              ref={scrollRef}
               className="max-h-64 overflow-y-auto pr-1"
               style={{
                 display: "grid",
@@ -150,6 +178,7 @@ export const ImageGrid = memo(function ImageGrid({ files, onReorder, onRemove, o
                   onPreview={openPreview}
                   onInfo={openInfo}
                   thumbnailSrc={thumbs.get(file)}
+                  onObserve={registerTile}
                 />
               ))}
             </div>

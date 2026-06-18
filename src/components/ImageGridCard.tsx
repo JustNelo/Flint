@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { X, ZoomIn, Info } from "lucide-react";
+import { X, ZoomIn, Info, Loader2 } from "lucide-react";
 import { resolveThumb } from "../lib/utils";
 
 interface ImageGridCardProps {
@@ -16,10 +16,12 @@ interface ImageGridCardProps {
    * (fall back to the original), `undefined` means it is still being generated.
    */
   thumbnailSrc?: string | null;
+  /** Register this card's element so the grid can lazily fetch its thumbnail. */
+  onObserve?: (path: string, el: HTMLElement | null) => void;
 }
 
 export const ImageGridCard = memo(
-  function ImageGridCard({ id, filePath, onRemove, index, onPreview, onInfo, thumbnailSrc }: ImageGridCardProps) {
+  function ImageGridCard({ id, filePath, onRemove, index, onPreview, onInfo, thumbnailSrc, onObserve }: ImageGridCardProps) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
     const style = {
@@ -52,7 +54,11 @@ export const ImageGridCard = memo(
 
     return (
       <div
-        ref={setNodeRef}
+        ref={(el) => {
+          setNodeRef(el);
+          onObserve?.(filePath, el);
+        }}
+        data-path={filePath}
         style={mergedStyle}
         {...attributes}
         {...listeners}
@@ -103,7 +109,13 @@ export const ImageGridCard = memo(
             }}
           />
         ) : (
-          <div className="h-full w-full" style={{ background: "var(--bg-elevated)" }} aria-hidden />
+          <div
+            className="h-full w-full flex items-center justify-center"
+            style={{ background: "var(--bg-elevated)" }}
+            aria-hidden
+          >
+            <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--text-tertiary)" }} strokeWidth={1.5} />
+          </div>
         )}
 
         {/* Info bar */}
