@@ -1,6 +1,6 @@
 [package]
 name = "flint"
-version = "2.2.0"
+version = "3.0.0"
 description = "Flint - Desktop image compression & PDF extraction tool"
 authors = ["Léon Gallet"]
 edition = "2021"
