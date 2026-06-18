@@ -2,26 +2,29 @@ name: Build & Release
 
 on:
   push:
+    branches:
+      - develop
     tags:
       - "v*"
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build:
+  # Verification gate — runs on every PR, develop push, tag and manual dispatch.
+  # Kept separate from `build` so it carries no deployment environment and never
+  # waits on environment protection rules.
+  check:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: windows-latest
-            args: ""
-          - platform: ubuntu-22.04
-            args: ""
+        platform:
+          - windows-latest
+          - ubuntu-22.04
 
     runs-on: ${{ matrix.platform }}
-    environment: Tauri
 
     steps:
       - name: Checkout repository
@@ -37,7 +40,7 @@ jobs:
       # (each is ~6 MB and bumps the repo size on every pdfium version bump).
       # Both binaries must exist on every runner because tauri.conf.json lists
       # them in bundle.resources unconditionally — the build-script verifies
-      # presence regardless of the target platform.
+      # presence regardless of the target platform, including for clippy/tests.
       # Source: https://github.com/bblanchon/pdfium-binaries
       - name: Fetch pdfium binaries
         shell: bash
@@ -96,8 +99,85 @@ jobs:
       - name: Install frontend dependencies
         run: bun install
 
+      - name: Frontend type-check
+        run: bunx tsc --noEmit
+
+      - name: Frontend format check
+        run: bun run format:check
+
       - name: Frontend tests
         run: bun run test
+
+  # Release build — heavy (full bundle on every matrix OS) and publishes a
+  # GitHub release, so it only runs for version tags and manual dispatch, and
+  # only after `check` is green.
+  build:
+    needs: check
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            args: ""
+          - platform: ubuntu-22.04
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    environment: Tauri
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      # See the note in the `check` job — both pdfium binaries must be present
+      # on every runner because tauri.conf.json bundles them unconditionally.
+      - name: Fetch pdfium binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p src-tauri/resources tmp-pdfium
+
+          if [ ! -f "src-tauri/resources/pdfium.dll" ]; then
+            echo "Fetching pdfium.dll..."
+            curl -sL -o tmp-pdfium/win.tgz \
+              "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-win-x64.tgz"
+            mkdir -p tmp-pdfium/win
+            tar -xzf tmp-pdfium/win.tgz -C tmp-pdfium/win
+            cp tmp-pdfium/win/bin/pdfium.dll src-tauri/resources/pdfium.dll
+          fi
+
+          if [ ! -f "src-tauri/resources/libpdfium.so" ]; then
+            echo "Fetching libpdfium.so..."
+            curl -sL -o tmp-pdfium/linux.tgz \
+              "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz"
+            mkdir -p tmp-pdfium/linux
+            tar -xzf tmp-pdfium/linux.tgz -C tmp-pdfium/linux
+            cp tmp-pdfium/linux/lib/libpdfium.so src-tauri/resources/libpdfium.so
+          fi
+
+          rm -rf tmp-pdfium
+          ls -la src-tauri/resources/
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install frontend dependencies
+        run: bun install
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
