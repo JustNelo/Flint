@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use crate::progress::emit_progress_simple;
 use crate::utils::{
@@ -309,6 +311,7 @@ pub fn merge_to_pdf(
     items: Vec<PdfBuilderItem>,
     options: MergePdfOptions,
     app_handle: &tauri::AppHandle,
+    cancel: Arc<AtomicBool>,
 ) -> MergePdfResult {
     let mut result = MergePdfResult {
         output_path: options.output_path.clone(),
@@ -347,7 +350,14 @@ pub fn merge_to_pdf(
 
     let total_items = items.len();
 
+    let mut cancelled = false;
     for (idx, item) in items.iter().enumerate() {
+        // Honor a global cancel between pages — a large merge is the slowest PDF
+        // operation, so without this a Cancel would be ignored until completion.
+        if cancel.load(Ordering::Relaxed) {
+            cancelled = true;
+            break;
+        }
         match item.source_type.as_str() {
             "image" => match add_image_page(&mut doc, pages_id, &item.source_path, &options) {
                 Ok(page_id) => {
@@ -408,6 +418,12 @@ pub fn merge_to_pdf(
         emit_progress_simple(app_handle, idx + 1, total_items, &item.source_path);
     }
 
+    // Bail before writing so a cancelled merge never leaves a partial PDF behind.
+    if cancelled {
+        result.errors.push("Merge cancelled".to_string());
+        return result;
+    }
+
     if result.page_count == 0 {
         result
             .errors
@@ -441,4 +457,126 @@ pub fn merge_to_pdf(
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{Rgba, RgbaImage};
+    use std::path::PathBuf;
+
+    // Unique temp path per test so parallel runs never collide.
+    fn unique_temp_path(test_name: &str, ext: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "pdf_builder_ops_{}_{}.{}",
+            test_name,
+            std::process::id(),
+            ext
+        ))
+    }
+
+    fn save_synthetic_image(path: &PathBuf, w: u32, h: u32) {
+        let img = RgbaImage::from_pixel(w, h, Rgba([200, 100, 50, 255]));
+        img.save(path).expect("failed to save synthetic test image");
+    }
+
+    #[test]
+    fn page_dimensions_a4_and_letter_portrait() {
+        // Portrait: width < height, returned as (w, h).
+        let (a4_w, a4_h) = get_page_dimensions("a4", "portrait");
+        assert_eq!((a4_w, a4_h), (595.28, 841.89));
+
+        let (letter_w, letter_h) = get_page_dimensions("letter", "portrait");
+        assert_eq!((letter_w, letter_h), (612.0, 792.0));
+    }
+
+    #[test]
+    fn page_dimensions_landscape_swaps_axes() {
+        let (portrait_w, portrait_h) = get_page_dimensions("a4", "portrait");
+        let (land_w, land_h) = get_page_dimensions("a4", "landscape");
+        // Landscape returns the portrait dimensions swapped.
+        assert_eq!(land_w, portrait_h);
+        assert_eq!(land_h, portrait_w);
+        assert!(land_w > land_h);
+    }
+
+    #[test]
+    fn page_dimensions_unknown_format_falls_back_to_a4() {
+        let unknown = get_page_dimensions("tabloid", "portrait");
+        let a4 = get_page_dimensions("a4", "portrait");
+        assert_eq!(unknown, a4);
+    }
+
+    #[test]
+    fn add_image_page_builds_a_fixed_format_page() {
+        let img_path = unique_temp_path("add_image_page_fixed", "png");
+        save_synthetic_image(&img_path, 64, 32);
+
+        let mut doc = LopdfDocument::with_version("1.7");
+        let pages_id = doc.new_object_id();
+        let before = doc.objects.len();
+
+        let options = MergePdfOptions {
+            page_format: "a4".to_string(),
+            orientation: "portrait".to_string(),
+            margin_px: 10,
+            image_quality: 80,
+            output_path: String::new(),
+        };
+
+        let result = add_image_page(&mut doc, pages_id, img_path.to_str().unwrap(), &options);
+
+        let _ = std::fs::remove_file(&img_path);
+
+        let page_id = result.expect("add_image_page should succeed for a valid image");
+
+        // The page plus its image XObject and content stream were all added.
+        assert!(doc.objects.len() > before);
+        assert!(doc.objects.len() >= before + 3);
+
+        // The returned object is a /Page whose Parent points at our pages node,
+        // and whose MediaBox matches the requested A4 portrait dimensions.
+        let obj = doc.get_object(page_id).expect("page object must exist");
+        let dict = obj.as_dict().expect("page must be a dictionary");
+        assert_eq!(dict.get(b"Type").unwrap().as_name().unwrap(), b"Page");
+        assert_eq!(
+            dict.get(b"Parent").unwrap().as_reference().unwrap(),
+            pages_id
+        );
+
+        let media_box = dict.get(b"MediaBox").unwrap().as_array().unwrap();
+        // [0 0 page_w page_h]
+        assert_eq!(media_box[2].as_float().unwrap(), 595.28);
+        assert_eq!(media_box[3].as_float().unwrap(), 841.89);
+    }
+
+    #[test]
+    fn add_image_page_fit_uses_image_dimensions_for_mediabox() {
+        let img_path = unique_temp_path("add_image_page_fit", "png");
+        save_synthetic_image(&img_path, 120, 90);
+
+        let mut doc = LopdfDocument::with_version("1.7");
+        let pages_id = doc.new_object_id();
+
+        let options = MergePdfOptions {
+            page_format: "fit".to_string(),
+            orientation: "portrait".to_string(),
+            margin_px: 0,
+            image_quality: 100,
+            output_path: String::new(),
+        };
+
+        let result = add_image_page(&mut doc, pages_id, img_path.to_str().unwrap(), &options);
+
+        let _ = std::fs::remove_file(&img_path);
+
+        let page_id = result.expect("add_image_page should succeed in fit mode");
+        let obj = doc.get_object(page_id).expect("page object must exist");
+        let dict = obj.as_dict().expect("page must be a dictionary");
+
+        // In "fit" mode the MediaBox matches the source image dimensions exactly.
+        let media_box = dict.get(b"MediaBox").unwrap().as_array().unwrap();
+        assert_eq!(media_box[2].as_float().unwrap(), 120.0);
+        assert_eq!(media_box[3].as_float().unwrap(), 90.0);
+    }
 }

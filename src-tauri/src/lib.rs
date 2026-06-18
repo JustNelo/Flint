@@ -469,13 +469,15 @@ async fn generate_pdf_thumbnails(
 #[tauri::command]
 async fn merge_to_pdf(
     app_handle: tauri::AppHandle,
+    token: tauri::State<'_, CancellationToken>,
     items: Vec<PdfBuilderItem>,
     options: MergePdfOptions,
 ) -> Result<MergePdfResult, String> {
     validate_path(&options.output_path)?;
     let item_paths: Vec<String> = items.iter().map(|i| i.source_path.clone()).collect();
     validate_paths(&item_paths)?;
-    run_blocking(move || pdf_builder_ops::merge_to_pdf(items, options, &app_handle)).await
+    let cancel = arm_cancel_token(&token);
+    run_blocking(move || pdf_builder_ops::merge_to_pdf(items, options, &app_handle, cancel)).await
 }
 
 #[tauri::command]
