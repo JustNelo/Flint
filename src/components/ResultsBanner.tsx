@@ -1,8 +1,8 @@
-import { useMemo, useState, useCallback, memo } from "react";
-import { CheckCircle, AlertCircle, XCircle, ZoomIn, FolderOpen, ArrowRight } from "lucide-react";
+import { useMemo, useState, useCallback, useEffect, useRef, memo } from "react";
+import { CheckCircle, AlertCircle, XCircle, ZoomIn, FolderOpen, ArrowRight, Loader2 } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { formatSize, isImage, safeAssetUrl } from "../lib/utils";
-import { useThumbnails } from "../hooks/useThumbnails";
+import { useLazyThumbnails } from "../hooks/useLazyThumbnails";
 import { BeforeAfterSlider } from "./ui/BeforeAfterSlider";
 import { useT } from "../i18n/i18n";
 import { useChainHandoff } from "../hooks/useChainHandoff";
@@ -43,10 +43,12 @@ export const ResultsBanner = memo(function ResultsBanner({
   // overwrite the same output path bypass the webview's stale image cache.
   const bust = useMemo(() => Date.now(), [results]);
 
-  // Bounded-size thumbnails for the output grid. `alwaysFresh` regenerates on
-  // every new result set since a re-run can overwrite the same output path.
+  // Output-grid thumbnails, fetched lazily as tiles scroll into view (observer
+  // below). Keyed on `bust` so a re-run that reuses output paths regenerates.
   const outputPaths = useMemo(() => results.filter((r) => r.success).map((r) => r.output_path), [results]);
-  const thumbs = useThumbnails(outputPaths, true);
+  const { thumbs, request } = useLazyThumbnails(bust);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const tileEls = useRef<Map<string, HTMLElement>>(new Map());
 
   const { requestChain } = useChainHandoff();
   const chainTargets = useMemo(() => {
@@ -56,6 +58,25 @@ export const ResultsBanner = memo(function ResultsBanner({
     );
     return compatibleChainTargets(sourceTab, exts);
   }, [sourceTab, outputPaths]);
+
+  // Fetch a tile's thumbnail only once it scrolls near the viewport.
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || outputPaths.length === 0) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .map((e) => (e.target as HTMLElement).dataset.path)
+          .filter((p): p is string => !!p);
+        if (visible.length > 0) request(visible);
+      },
+      { root, rootMargin: "200px 0px", threshold: 0.01 },
+    );
+    tileEls.current.forEach((el) => obs.observe(el));
+    return () => obs.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outputPaths, request]);
 
   if (results.length === 0) return null;
 
@@ -109,6 +130,7 @@ export const ResultsBanner = memo(function ResultsBanner({
 
         {successResults.length > 0 && (
           <div
+            ref={scrollRef}
             className="max-h-56 overflow-y-auto pr-1"
             style={{
               display: "grid",
@@ -127,6 +149,11 @@ export const ResultsBanner = memo(function ResultsBanner({
               return (
                 <div
                   key={i}
+                  data-path={r.output_path}
+                  ref={(el) => {
+                    if (el) tileEls.current.set(r.output_path, el);
+                    else tileEls.current.delete(r.output_path);
+                  }}
                   className="group relative overflow-hidden aspect-square cursor-pointer"
                   style={{
                     borderRadius: 8,
@@ -148,7 +175,13 @@ export const ResultsBanner = memo(function ResultsBanner({
                       }}
                     />
                   ) : canPreview ? (
-                    <div className="h-full w-full" style={{ background: "var(--bg-elevated)" }} aria-hidden />
+                    <div
+                      className="h-full w-full flex items-center justify-center"
+                      style={{ background: "var(--bg-elevated)" }}
+                      aria-hidden
+                    >
+                      <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--text-tertiary)" }} strokeWidth={1.5} />
+                    </div>
                   ) : (
                     <div className="h-full w-full flex items-center justify-center">
                       <CheckCircle className="h-5 w-5 text-green-400/50" strokeWidth={1.5} />
