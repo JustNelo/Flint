@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { Toaster } from "sonner";
 import {
@@ -23,32 +23,47 @@ import { TitleBar } from "./components/TitleBar";
 import { CommandPalette, type CommandTool } from "./components/CommandPalette";
 import { WorkbenchShell } from "./components/WorkbenchShell";
 import { ToolRail } from "./components/ToolRail";
-import { CompressTab } from "./components/CompressTab";
-import { ConvertTab } from "./components/ConvertTab";
-import { ResizeTab } from "./components/ResizeTab";
-import { WatermarkTab } from "./components/WatermarkTab";
-import { ExifStripTab } from "./components/ExifStripTab";
-import { OptimizeTab } from "./components/OptimizeTab";
-import { CropTab } from "./components/CropTab";
-import { PdfWorkbenchTab } from "./components/PdfWorkbenchTab";
-import { PaletteTab } from "./components/PaletteTab";
-import { FaviconTab } from "./components/FaviconTab";
-import { AnimationTab } from "./components/AnimationTab";
-import { SpriteSheetTab } from "./components/SpriteSheetTab";
-import { Base64Tab } from "./components/Base64Tab";
-import { QrCodeTab } from "./components/QrCodeTab";
-import { BulkRenameTab } from "./components/BulkRenameTab";
-import { SvgRasterizeTab } from "./components/SvgRasterizeTab";
+const CompressTab = lazy(() => import("./components/CompressTab").then((m) => ({ default: m.CompressTab })));
+const ConvertTab = lazy(() => import("./components/ConvertTab").then((m) => ({ default: m.ConvertTab })));
+const ResizeTab = lazy(() => import("./components/ResizeTab").then((m) => ({ default: m.ResizeTab })));
+const WatermarkTab = lazy(() => import("./components/WatermarkTab").then((m) => ({ default: m.WatermarkTab })));
+const ExifStripTab = lazy(() => import("./components/ExifStripTab").then((m) => ({ default: m.ExifStripTab })));
+const OptimizeTab = lazy(() => import("./components/OptimizeTab").then((m) => ({ default: m.OptimizeTab })));
+const CropTab = lazy(() => import("./components/CropTab").then((m) => ({ default: m.CropTab })));
+const PdfWorkbenchTab = lazy(() =>
+  import("./components/PdfWorkbenchTab").then((m) => ({ default: m.PdfWorkbenchTab })),
+);
+const PaletteTab = lazy(() => import("./components/PaletteTab").then((m) => ({ default: m.PaletteTab })));
+const FaviconTab = lazy(() => import("./components/FaviconTab").then((m) => ({ default: m.FaviconTab })));
+const AnimationTab = lazy(() => import("./components/AnimationTab").then((m) => ({ default: m.AnimationTab })));
+const SpriteSheetTab = lazy(() => import("./components/SpriteSheetTab").then((m) => ({ default: m.SpriteSheetTab })));
+const Base64Tab = lazy(() => import("./components/Base64Tab").then((m) => ({ default: m.Base64Tab })));
+const QrCodeTab = lazy(() => import("./components/QrCodeTab").then((m) => ({ default: m.QrCodeTab })));
+const BulkRenameTab = lazy(() => import("./components/BulkRenameTab").then((m) => ({ default: m.BulkRenameTab })));
+const SvgRasterizeTab = lazy(() => import("./components/SvgRasterizeTab").then((m) => ({ default: m.SvgRasterizeTab })));
 import { GlobalProgressBar } from "./components/GlobalProgressBar";
 import { SplashScreen } from "./components/SplashScreen";
-import { SettingsPanel } from "./components/SettingsPanel";
-import { OnboardingModal } from "./components/OnboardingModal";
+const SettingsPanel = lazy(() => import("./components/SettingsPanel").then((m) => ({ default: m.SettingsPanel })));
+const OnboardingModal = lazy(() => import("./components/OnboardingModal").then((m) => ({ default: m.OnboardingModal })));
 import { UpdateBanner } from "./components/UpdateBanner";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useAutoUpdate } from "./hooks/useAutoUpdate";
 import { useT } from "./i18n/i18n";
 import type { TabId } from "./types";
 import "./App.css";
+
+// Shown while a lazily-loaded tool chunk resolves. Chunks load from local disk
+// in ~ms, so this is intentionally minimal and rarely visible.
+function TabFallback() {
+  return (
+    <div className="flex items-center justify-center" style={{ minHeight: 240 }}>
+      <div
+        className="animate-pulse"
+        style={{ width: 28, height: 28, borderRadius: 8, background: "var(--bg-elevated)" }}
+      />
+    </div>
+  );
+}
 
 const TAB_EXTENSIONS: Record<TabId, string[]> = {
   compress: ["png", "jpg", "jpeg", "bmp", "ico", "tiff", "tif", "webp"],
@@ -232,32 +247,34 @@ function App() {
           />
         }
       >
-        {ETABLI_TOOLS.has(activeTab) ? (
-          <div>
-            <ToolHeader title={t(labelKeyFor(activeTab))} description={t(descKeyFor(activeTab))} />
-            {activeTab === "compress" && <CompressTab />}
-            {activeTab === "convert" && <ConvertTab />}
-            {activeTab === "optimize" && <OptimizeTab />}
-            {activeTab === "resize" && <ResizeTab />}
-            {activeTab === "watermark" && <WatermarkTab />}
-            {activeTab === "svg-rasterize" && <SvgRasterizeTab />}
-            {activeTab === "favicon" && <FaviconTab />}
-            {activeTab === "spritesheet" && <SpriteSheetTab />}
-            {activeTab === "strip" && <ExifStripTab />}
-            {activeTab === "bulk-rename" && <BulkRenameTab />}
-            {activeTab === "crop" && <CropTab />}
-            {activeTab === "animation" && <AnimationTab />}
-            {activeTab === "pdf-toolkit" && <PdfWorkbenchTab />}
-          </div>
-        ) : (
-          <div className="mx-auto" style={{ maxWidth: 860 }}>
-            <ToolHeader title={t(labelKeyFor(activeTab))} description={t(descKeyFor(activeTab))} />
+        <Suspense fallback={<TabFallback />}>
+          {ETABLI_TOOLS.has(activeTab) ? (
+            <div>
+              <ToolHeader title={t(labelKeyFor(activeTab))} description={t(descKeyFor(activeTab))} />
+              {activeTab === "compress" && <CompressTab />}
+              {activeTab === "convert" && <ConvertTab />}
+              {activeTab === "optimize" && <OptimizeTab />}
+              {activeTab === "resize" && <ResizeTab />}
+              {activeTab === "watermark" && <WatermarkTab />}
+              {activeTab === "svg-rasterize" && <SvgRasterizeTab />}
+              {activeTab === "favicon" && <FaviconTab />}
+              {activeTab === "spritesheet" && <SpriteSheetTab />}
+              {activeTab === "strip" && <ExifStripTab />}
+              {activeTab === "bulk-rename" && <BulkRenameTab />}
+              {activeTab === "crop" && <CropTab />}
+              {activeTab === "animation" && <AnimationTab />}
+              {activeTab === "pdf-toolkit" && <PdfWorkbenchTab />}
+            </div>
+          ) : (
+            <div className="mx-auto" style={{ maxWidth: 860 }}>
+              <ToolHeader title={t(labelKeyFor(activeTab))} description={t(descKeyFor(activeTab))} />
 
-            {activeTab === "palette" && <PaletteTab />}
-            {activeTab === "base64" && <Base64Tab />}
-            {activeTab === "qrcode" && <QrCodeTab />}
-          </div>
-        )}
+              {activeTab === "palette" && <PaletteTab />}
+              {activeTab === "base64" && <Base64Tab />}
+              {activeTab === "qrcode" && <QrCodeTab />}
+            </div>
+          )}
+        </Suspense>
       </WorkbenchShell>
 
       <SplashScreen visible={isLoading} />
@@ -274,23 +291,27 @@ function App() {
       />
 
       {showSettings && (
-        <SettingsPanel
-          onClose={() => setShowSettings(false)}
-          onResetOnboarding={() => {
-            setShowSettings(false);
-            setShowOnboarding(true);
-          }}
-        />
+        <Suspense fallback={null}>
+          <SettingsPanel
+            onClose={() => setShowSettings(false)}
+            onResetOnboarding={() => {
+              setShowSettings(false);
+              setShowOnboarding(true);
+            }}
+          />
+        </Suspense>
       )}
       {showOnboarding && (
-        <OnboardingModal
-          onComplete={() => {
-            setShowOnboarding(false);
-            try {
-              localStorage.setItem("rustine_onboarded", "1");
-            } catch {}
-          }}
-        />
+        <Suspense fallback={null}>
+          <OnboardingModal
+            onComplete={() => {
+              setShowOnboarding(false);
+              try {
+                localStorage.setItem("rustine_onboarded", "1");
+              } catch {}
+            }}
+          />
+        </Suspense>
       )}
 
       <Toaster
