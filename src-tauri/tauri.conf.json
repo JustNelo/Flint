@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Flint",
   "version": "2.2.0",
-  "identifier": "com.leong.rust-ine",
+  "identifier": "com.leong.flint",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:1420",
@@ -44,7 +44,7 @@
       "active": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIxMzA0QTkzRjJBMDIyMjcKUldRbklxRHlrMG93c2NWVVQxaXNkRWRqdmduTElub1dXNnpOc2ZqUzBTNU1URnh2NnNFaElYbDgK",
       "endpoints": [
-        "https://github.com/JustNelo/Rust-ine/releases/latest/download/latest.json"
+        "https://github.com/JustNelo/Flint/releases/latest/download/latest.json"
       ]
     }
   },
