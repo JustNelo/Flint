@@ -53,7 +53,8 @@ export const BeforeAfterSlider = memo(function BeforeAfterSlider({ result, onClo
 
   // Stable URLs — computed once per result, never during drag
   const beforeSrc = useMemo(() => safeAssetUrl(result.input_path), [result.input_path]);
-  const afterSrc = useMemo(() => safeAssetUrl(result.output_path, true), [result.output_path]);
+  const bust = useMemo(() => Date.now(), [result.output_path]);
+  const afterSrc = useMemo(() => safeAssetUrl(result.output_path, bust), [result.output_path, bust]);
 
   return (
     <div

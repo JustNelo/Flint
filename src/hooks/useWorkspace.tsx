@@ -30,7 +30,6 @@ interface WorkspaceContextValue {
   selectWorkspace: () => Promise<void>;
   getOutputDir: (tabId: TabId) => Promise<string>;
   openInExplorer: () => Promise<void>;
-  openOutputDir: (tabId: TabId) => Promise<void>;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
@@ -60,12 +59,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const subPathFor = useCallback(
+    (tabId: TabId): string => {
+      const subFolder = SUB_FOLDERS[tabId];
+      if (!subFolder) throw new Error(`No output sub-folder configured for tab "${tabId}"`);
+      const sep = workspace.includes("/") ? "/" : "\\";
+      return `${workspace}${sep}${subFolder}`;
+    },
+    [workspace],
+  );
+
   const getOutputDir = useCallback(
     async (tabId: TabId): Promise<string> => {
       if (!workspace) return "";
-      const sep = workspace.includes("/") ? "/" : "\\";
-      const subFolder = SUB_FOLDERS[tabId];
-      const outputDir = `${workspace}${sep}${subFolder}`;
+      const outputDir = subPathFor(tabId);
 
       try {
         const dirExists = await exists(outputDir);
@@ -78,7 +85,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
       return outputDir;
     },
-    [workspace],
+    [workspace, subPathFor],
   );
 
   const openInExplorer = useCallback(async () => {
@@ -90,24 +97,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [workspace]);
 
-  const openOutputDir = useCallback(
-    async (tabId: TabId) => {
-      if (!workspace) return;
-      const sep = workspace.includes("/") ? "/" : "\\";
-      const subFolder = SUB_FOLDERS[tabId];
-      const outputDir = `${workspace}${sep}${subFolder}`;
-      try {
-        await revealItemInDir(outputDir);
-      } catch (err) {
-        console.error("Cannot open output dir:", err);
-      }
-    },
-    [workspace],
-  );
-
   const value = useMemo(
-    () => ({ workspace, selectWorkspace, getOutputDir, openInExplorer, openOutputDir }),
-    [workspace, selectWorkspace, getOutputDir, openInExplorer, openOutputDir],
+    () => ({ workspace, selectWorkspace, getOutputDir, openInExplorer }),
+    [workspace, selectWorkspace, getOutputDir, openInExplorer],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

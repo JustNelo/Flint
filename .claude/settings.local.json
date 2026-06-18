@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "PowerShell(node ./node_modules/typescript/bin/tsc --noEmit 2>&1 | Select-Object -First 40; \"EXIT=$LASTEXITCODE\")",
+      "PowerShell(bunx prettier --write src/components/ImageGridCard.tsx src/components/ResultsBanner.tsx src/components/CompressTab.tsx 2>&1 | Select-Object -Last 10; \"EXIT=$LASTEXITCODE\")",
+      "PowerShell(bun run *)",
+      "PowerShell(node ./node_modules/typescript/bin/tsc --noEmit 2>&1 | Select-Object -First 20; \"EXIT=$LASTEXITCODE\")",
+      "mcp__visualize__read_me",
+      "mcp__visualize__show_widget",
+      "PowerShell(bunx prettier --check src/components/SvgRasterizeTab.tsx)",
+      "PowerShell($f = \"src/components/AnimationTab.tsx\"; foreach \\($i in @\\(\"Film\",\"CheckCircle\",\"XCircle\",\"ArrowUp\",\"ArrowDown\",\"Trash2\",\"DropZone\",\"ActionButton\",\"MaterialPanel\",\"ControlsPanel\",\"safeAssetUrl\"\\)\\) { $c = \\(Select-String -Path $f -Pattern $i -AllMatches | Measure-Object\\).Count; \"$i = $c\" })"
     ]
   }
 }

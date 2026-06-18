@@ -1,0 +1,24 @@
+# Enforce LF line endings for all text files on every platform so formatting
+# tools (Prettier endOfLine:lf, rustfmt) and CI behave identically on Windows
+# and Linux. Without this, Windows runners check out CRLF (core.autocrlf) and
+# `prettier --check` fails on every file while Ubuntu passes.
+* text=auto eol=lf
+
+# Binary assets — never normalize or alter line endings.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.bmp   binary
+*.ico   binary
+*.icns  binary
+*.webp  binary
+*.tiff  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.dll   binary
+*.so    binary
+*.dylib binary
+*.pdf   binary

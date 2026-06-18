@@ -1,8 +1,8 @@
 import { memo } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { X, ZoomIn, Info } from "lucide-react";
-import { safeAssetUrl } from "../lib/utils";
+import { X, ZoomIn, Info, Loader2 } from "lucide-react";
+import { resolveThumb } from "../lib/utils";
 
 interface ImageGridCardProps {
   id: string;
@@ -11,10 +11,26 @@ interface ImageGridCardProps {
   index: number;
   onPreview: (filePath: string) => void;
   onInfo?: (filePath: string) => void;
+  /**
+   * Downscaled thumbnail data URI. `null` means the file can't be rasterized
+   * (fall back to the original), `undefined` means it is still being generated.
+   */
+  thumbnailSrc?: string | null;
+  /** Register this card's element so the grid can lazily fetch its thumbnail. */
+  onObserve?: (path: string, el: HTMLElement | null) => void;
 }
 
 export const ImageGridCard = memo(
-  function ImageGridCard({ id, filePath, onRemove, index, onPreview, onInfo }: ImageGridCardProps) {
+  function ImageGridCard({
+    id,
+    filePath,
+    onRemove,
+    index,
+    onPreview,
+    onInfo,
+    thumbnailSrc,
+    onObserve,
+  }: ImageGridCardProps) {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
     const style = {
@@ -32,11 +48,26 @@ export const ImageGridCard = memo(
       borderRadius: 8,
       border: "1px solid var(--bg-border)",
       background: "var(--bg-overlay)",
-    };
+      // Skip rendering/decoding cards that are scrolled out of view (kept active
+      // while dragging so dnd-kit can move them). `auto` length remembers the
+      // real size once painted, so the scrollbar doesn't jump.
+      contentVisibility: isDragging ? "visible" : "auto",
+      containIntrinsicSize: "auto 140px",
+    } as React.CSSProperties;
+
+    // Prefer the bounded-size thumbnail; fall back to the original only for
+    // sources the backend couldn't rasterize (null, e.g. SVG). While pending
+    // (undefined) we render a neutral placeholder rather than decoding the
+    // full-resolution original.
+    const imgSrc = resolveThumb(thumbnailSrc, filePath);
 
     return (
       <div
-        ref={setNodeRef}
+        ref={(el) => {
+          setNodeRef(el);
+          onObserve?.(filePath, el);
+        }}
+        data-path={filePath}
         style={mergedStyle}
         {...attributes}
         {...listeners}
@@ -74,17 +105,27 @@ export const ImageGridCard = memo(
           </button>
         )}
 
-        {/* Thumbnail */}
-        <img
-          src={safeAssetUrl(filePath)}
-          alt={fileName}
-          loading="lazy"
-          draggable={false}
-          className="h-full w-full object-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
-        />
+        {/* Thumbnail — bounded-size decode; placeholder while it is generated */}
+        {imgSrc ? (
+          <img
+            src={imgSrc}
+            alt={fileName}
+            decoding="async"
+            draggable={false}
+            className="h-full w-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
+        ) : (
+          <div
+            className="h-full w-full flex items-center justify-center"
+            style={{ background: "var(--bg-elevated)" }}
+            aria-hidden
+          >
+            <Loader2 className="h-4 w-4 animate-spin" style={{ color: "var(--text-tertiary)" }} strokeWidth={1.5} />
+          </div>
+        )}
 
         {/* Info bar */}
         <div
@@ -107,6 +148,7 @@ export const ImageGridCard = memo(
       prev.id === next.id &&
       prev.filePath === next.filePath &&
       prev.index === next.index &&
+      prev.thumbnailSrc === next.thumbnailSrc &&
       prev.onRemove === next.onRemove &&
       prev.onPreview === next.onPreview &&
       prev.onInfo === next.onInfo

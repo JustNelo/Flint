@@ -12,6 +12,32 @@ interface UsePdfMaterializerArgs {
 }
 
 /**
+ * Build the `{ items, options }` argument pair passed to the
+ * `merge_to_pdf` Tauri command. Shared between grid materialization and
+ * the workbench build action so both stay in lockstep.
+ */
+export function buildMergeArgs(
+  pages: BuilderPage[],
+  outputPath: string,
+): { items: PdfBuilderItem[]; options: MergePdfOptions } {
+  const items: PdfBuilderItem[] = pages.map((page) => ({
+    source_path: page.sourcePath,
+    page_number: page.sourceType === "pdf" ? page.pageNumber : null,
+    source_type: page.sourceType,
+  }));
+
+  const options: MergePdfOptions = {
+    page_format: "fit",
+    orientation: "portrait",
+    margin_px: 0,
+    image_quality: 90,
+    output_path: outputPath,
+  };
+
+  return { items, options };
+}
+
+/**
  * Turn the current grid into an on-disk PDF the pipeline can act on.
  *
  * Fast path: if the grid is one untouched PDF, we return its path
@@ -35,19 +61,7 @@ export function usePdfMaterializer({ pagesRef, gridModified, getSingleSourcePdf,
       const sep = outputDir.includes("/") ? "/" : "\\";
       const tempPath = `${outputDir}${sep}_rustine_temp_${Date.now()}.pdf`;
 
-      const items: PdfBuilderItem[] = currentPages.map((page) => ({
-        source_path: page.sourcePath,
-        page_number: page.sourceType === "pdf" ? page.pageNumber : null,
-        source_type: page.sourceType,
-      }));
-
-      const options: MergePdfOptions = {
-        page_format: "fit",
-        orientation: "portrait",
-        margin_px: 0,
-        image_quality: 90,
-        output_path: tempPath,
-      };
+      const { items, options } = buildMergeArgs(currentPages, tempPath);
 
       const res = await invoke<MergePdfResult>("merge_to_pdf", { items, options });
       if (res.page_count === 0) {

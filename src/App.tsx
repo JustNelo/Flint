@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { Toaster } from "sonner";
 import {
@@ -20,30 +20,39 @@ import {
   FileImage,
 } from "lucide-react";
 import { TitleBar } from "./components/TitleBar";
-import { CompressTab } from "./components/CompressTab";
-import { ConvertTab } from "./components/ConvertTab";
-import { ResizeTab } from "./components/ResizeTab";
-import { WatermarkTab } from "./components/WatermarkTab";
-import { ExifStripTab } from "./components/ExifStripTab";
-import { OptimizeTab } from "./components/OptimizeTab";
-import { CropTab } from "./components/CropTab";
-import { PdfWorkbenchTab } from "./components/PdfWorkbenchTab";
-import { PaletteTab } from "./components/PaletteTab";
-import { FaviconTab } from "./components/FaviconTab";
-import { AnimationTab } from "./components/AnimationTab";
-import { SpriteSheetTab } from "./components/SpriteSheetTab";
-import { Base64Tab } from "./components/Base64Tab";
-import { QrCodeTab } from "./components/QrCodeTab";
-import { BulkRenameTab } from "./components/BulkRenameTab";
-import { SvgRasterizeTab } from "./components/SvgRasterizeTab";
-import { HistoryModal } from "./components/HistoryModal";
+import { CommandPalette, type CommandTool } from "./components/CommandPalette";
+import { WorkbenchShell } from "./components/WorkbenchShell";
+import { ToolRail } from "./components/ToolRail";
+const CompressTab = lazy(() => import("./components/CompressTab").then((m) => ({ default: m.CompressTab })));
+const ConvertTab = lazy(() => import("./components/ConvertTab").then((m) => ({ default: m.ConvertTab })));
+const ResizeTab = lazy(() => import("./components/ResizeTab").then((m) => ({ default: m.ResizeTab })));
+const WatermarkTab = lazy(() => import("./components/WatermarkTab").then((m) => ({ default: m.WatermarkTab })));
+const ExifStripTab = lazy(() => import("./components/ExifStripTab").then((m) => ({ default: m.ExifStripTab })));
+const OptimizeTab = lazy(() => import("./components/OptimizeTab").then((m) => ({ default: m.OptimizeTab })));
+const CropTab = lazy(() => import("./components/CropTab").then((m) => ({ default: m.CropTab })));
+const PdfWorkbenchTab = lazy(() =>
+  import("./components/PdfWorkbenchTab").then((m) => ({ default: m.PdfWorkbenchTab })),
+);
+const PaletteTab = lazy(() => import("./components/PaletteTab").then((m) => ({ default: m.PaletteTab })));
+const FaviconTab = lazy(() => import("./components/FaviconTab").then((m) => ({ default: m.FaviconTab })));
+const AnimationTab = lazy(() => import("./components/AnimationTab").then((m) => ({ default: m.AnimationTab })));
+const SpriteSheetTab = lazy(() => import("./components/SpriteSheetTab").then((m) => ({ default: m.SpriteSheetTab })));
+const Base64Tab = lazy(() => import("./components/Base64Tab").then((m) => ({ default: m.Base64Tab })));
+const QrCodeTab = lazy(() => import("./components/QrCodeTab").then((m) => ({ default: m.QrCodeTab })));
+const BulkRenameTab = lazy(() => import("./components/BulkRenameTab").then((m) => ({ default: m.BulkRenameTab })));
+const SvgRasterizeTab = lazy(() =>
+  import("./components/SvgRasterizeTab").then((m) => ({ default: m.SvgRasterizeTab })),
+);
 import { GlobalProgressBar } from "./components/GlobalProgressBar";
 import { SplashScreen } from "./components/SplashScreen";
-import { SettingsPanel } from "./components/SettingsPanel";
-import { OnboardingModal } from "./components/OnboardingModal";
+const SettingsPanel = lazy(() => import("./components/SettingsPanel").then((m) => ({ default: m.SettingsPanel })));
+const OnboardingModal = lazy(() =>
+  import("./components/OnboardingModal").then((m) => ({ default: m.OnboardingModal })),
+);
 import { UpdateBanner } from "./components/UpdateBanner";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useAutoUpdate } from "./hooks/useAutoUpdate";
+import { useChainHandoff } from "./hooks/useChainHandoff";
 import { useT } from "./i18n/i18n";
 import type { TabId } from "./types";
 import "./App.css";
@@ -110,43 +119,49 @@ const SIDEBAR_SECTIONS: SidebarSection[] = [
   },
 ];
 
-const TAB_DESC_KEYS: Record<TabId, string> = {
-  compress: "tab.compress.desc",
-  convert: "tab.convert.desc",
-  resize: "tab.resize.desc",
-  watermark: "tab.watermark.desc",
-  strip: "tab.strip.desc",
-  optimize: "tab.optimize.desc",
-  crop: "tab.crop.desc",
-  "pdf-toolkit": "tab.pdf_toolkit.desc",
-  palette: "tab.palette.desc",
-  favicon: "tab.favicon.desc",
-  animation: "tab.animation.desc",
-  spritesheet: "tab.spritesheet.desc",
-  base64: "tab.base64.desc",
-  qrcode: "tab.qrcode.desc",
-  "bulk-rename": "tab.bulk_rename.desc",
-  "svg-rasterize": "tab.svg_rasterize.desc",
-};
+// Tools migrated to the full-width Établi 2-pane layout (others use the centered column).
+const ETABLI_TOOLS = new Set<TabId>([
+  "compress",
+  "convert",
+  "optimize",
+  "resize",
+  "watermark",
+  "svg-rasterize",
+  "favicon",
+  "spritesheet",
+  "strip",
+  "bulk-rename",
+  "crop",
+  "animation",
+  "pdf-toolkit",
+]);
 
-const TAB_LABEL_KEYS: Record<TabId, string> = {
-  compress: "tab.compress",
-  convert: "tab.convert",
-  resize: "tab.resize",
-  watermark: "tab.watermark",
-  strip: "tab.strip",
-  optimize: "tab.optimize",
-  crop: "tab.crop",
-  "pdf-toolkit": "tab.pdf_toolkit",
-  palette: "tab.palette",
-  favicon: "tab.favicon",
-  animation: "tab.animation",
-  spritesheet: "tab.spritesheet",
-  base64: "tab.base64",
-  qrcode: "tab.qrcode",
-  "bulk-rename": "tab.bulk_rename",
-  "svg-rasterize": "tab.svg_rasterize",
-};
+const TAB_LABEL_KEYS = Object.fromEntries(
+  SIDEBAR_SECTIONS.flatMap((s) => s.tabs.map((t) => [t.id, t.labelKey])),
+) as Record<TabId, string>;
+const labelKeyFor = (id: TabId) => TAB_LABEL_KEYS[id];
+const descKeyFor = (id: TabId) => `${TAB_LABEL_KEYS[id]}.desc`;
+
+function ToolHeader({ title, description }: { title: string; description: string }) {
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <h2
+        style={{
+          fontSize: "var(--text-xl)",
+          fontWeight: 600,
+          color: "var(--text-primary)",
+          letterSpacing: "-0.01em",
+          lineHeight: 1.3,
+        }}
+      >
+        {title}
+      </h2>
+      <p style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
+        {description}
+      </p>
+    </div>
+  );
+}
 
 function App() {
   const { t } = useT();
@@ -156,11 +171,12 @@ function App() {
     install: installUpdate,
     dismiss: dismissUpdate,
   } = useAutoUpdate();
+  const { pending } = useChainHandoff();
   const [appVersion, setAppVersion] = useState("");
   const [activeTab, setActiveTab] = useState<TabId>("compress");
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(() => {
     try {
       return localStorage.getItem("rustine_onboarded") !== "1";
@@ -177,179 +193,124 @@ function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  const activeExtensions = useMemo(() => TAB_EXTENSIONS[activeTab], [activeTab]);
-
-  const handleShortcutFiles = useCallback((paths: string[]) => {
-    // Dispatch a custom event that tab components can listen to
-    window.dispatchEvent(new CustomEvent("rustine-shortcut-files", { detail: paths }));
+  // ⌘K / Ctrl+K — toggle the command palette
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+        e.preventDefault();
+        setCmdOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
+
+  // Chain handoff: when a tool requests chaining its output into another tool,
+  // switch to that tool — it consumes the handed-off files on mount.
+  useEffect(() => {
+    if (pending) setActiveTab(pending.tab);
+  }, [pending]);
+
+  const commandTools = useMemo<CommandTool[]>(
+    () =>
+      SIDEBAR_SECTIONS.flatMap((section) =>
+        section.tabs.map((tab) => ({
+          id: tab.id,
+          label: t(tab.labelKey),
+          category: t(section.titleKey),
+          icon: tab.icon,
+        })),
+      ),
+    [t],
+  );
+
+  const activeExtensions = useMemo(() => TAB_EXTENSIONS[activeTab], [activeTab]);
 
   useGlobalShortcuts({
     acceptExtensions: activeExtensions,
-    onFilesSelected: handleShortcutFiles,
   });
 
   return (
     <div className="relative flex h-screen w-screen flex-col overflow-hidden" style={{ background: "var(--bg-base)" }}>
-      <TitleBar onShowHistory={() => setShowHistory(true)} onShowSettings={() => setShowSettings(true)} />
+      <TitleBar onShowSettings={() => setShowSettings(true)} />
       <UpdateBanner status={updateStatus} version={updateVersion} onInstall={installUpdate} onDismiss={dismissUpdate} />
 
-      <div className="relative z-10 flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <aside
-          className="flex shrink-0 flex-col"
-          style={{ width: 200, background: "var(--bg-surface)", borderRight: "1px solid var(--bg-border)" }}
-        >
-          <nav className="flex flex-col gap-0.5 px-2 mt-1 flex-1 overflow-y-auto">
-            {SIDEBAR_SECTIONS.map((section) => (
-              <div key={section.titleKey} className="mb-1">
-                <div className="px-3 pt-4 pb-1.5">
-                  <span
-                    className="font-semibold uppercase select-none"
-                    style={{ fontSize: 9, letterSpacing: "0.08em", color: "var(--text-tertiary)" }}
-                  >
-                    {t(section.titleKey)}
-                  </span>
-                </div>
-                {section.tabs.map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className="relative flex items-center w-full cursor-pointer"
-                      style={{
-                        height: 32,
-                        padding: "0 12px",
-                        borderRadius: 6,
-                        gap: 8,
-                        fontSize: "var(--text-sm)",
-                        fontWeight: 500,
-                        fontFamily: "var(--font-sans)",
-                        transition: "all 150ms ease",
-                        background: isActive ? "var(--glass-bg)" : "transparent",
-                        color: isActive ? "var(--indigo-glow)" : "var(--text-secondary)",
-                        border: "none",
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.background = "var(--bg-overlay)";
-                          e.currentTarget.style.color = "var(--text-primary)";
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.background = "transparent";
-                          e.currentTarget.style.color = "var(--text-secondary)";
-                        }
-                      }}
-                    >
-                      {/* Active indicator bar */}
-                      <span
-                        className="absolute left-0 top-1/2 -translate-y-1/2"
-                        style={{
-                          width: 2,
-                          height: 16,
-                          borderRadius: 1,
-                          background: isActive ? "var(--indigo-core)" : "transparent",
-                          transition: "transform 150ms ease, background 150ms ease",
-                          transform: isActive ? "scaleX(1)" : "scaleX(0)",
-                          transformOrigin: "left",
-                        }}
-                      />
-                      <Icon
-                        style={{
-                          width: 14,
-                          height: 14,
-                          color: isActive ? "var(--indigo-core)" : "var(--text-tertiary)",
-                          transition: "color 150ms ease",
-                          flexShrink: 0,
-                        }}
-                        strokeWidth={1.5}
-                      />
-                      {t(tab.labelKey)}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-          </nav>
+      <WorkbenchShell
+        rail={
+          <ToolRail
+            sections={SIDEBAR_SECTIONS}
+            activeTab={activeTab}
+            onSelect={setActiveTab}
+            onOpenCommand={() => setCmdOpen(true)}
+            appVersion={appVersion}
+          />
+        }
+      >
+        <Suspense fallback={null}>
+          {ETABLI_TOOLS.has(activeTab) ? (
+            <div>
+              <ToolHeader title={t(labelKeyFor(activeTab))} description={t(descKeyFor(activeTab))} />
+              {activeTab === "compress" && <CompressTab />}
+              {activeTab === "convert" && <ConvertTab />}
+              {activeTab === "optimize" && <OptimizeTab />}
+              {activeTab === "resize" && <ResizeTab />}
+              {activeTab === "watermark" && <WatermarkTab />}
+              {activeTab === "svg-rasterize" && <SvgRasterizeTab />}
+              {activeTab === "favicon" && <FaviconTab />}
+              {activeTab === "spritesheet" && <SpriteSheetTab />}
+              {activeTab === "strip" && <ExifStripTab />}
+              {activeTab === "bulk-rename" && <BulkRenameTab />}
+              {activeTab === "crop" && <CropTab />}
+              {activeTab === "animation" && <AnimationTab />}
+              {activeTab === "pdf-toolkit" && <PdfWorkbenchTab />}
+            </div>
+          ) : (
+            <div className="mx-auto" style={{ maxWidth: 860 }}>
+              <ToolHeader title={t(labelKeyFor(activeTab))} description={t(descKeyFor(activeTab))} />
 
-          {appVersion && (
-            <div
-              className="px-3 py-3 flex items-center justify-center"
-              style={{ borderTop: "1px solid var(--bg-border)" }}
-            >
-              <span style={{ fontSize: 10, color: "var(--text-tertiary)", fontFamily: "var(--font-mono)" }}>
-                v{appVersion}
-              </span>
+              {activeTab === "palette" && <PaletteTab />}
+              {activeTab === "base64" && <Base64Tab />}
+              {activeTab === "qrcode" && <QrCodeTab />}
             </div>
           )}
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 overflow-y-auto" style={{ padding: "32px 40px" }}>
-          <div className="mx-auto" style={{ maxWidth: 680 }}>
-            <div style={{ marginBottom: 24 }}>
-              <h2
-                style={{
-                  fontSize: "var(--text-xl)",
-                  fontWeight: 600,
-                  color: "var(--text-primary)",
-                  letterSpacing: "-0.01em",
-                  lineHeight: 1.3,
-                }}
-              >
-                {t(TAB_LABEL_KEYS[activeTab])}
-              </h2>
-              <p style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)", marginTop: 4, lineHeight: 1.5 }}>
-                {t(TAB_DESC_KEYS[activeTab])}
-              </p>
-            </div>
-
-            {activeTab === "compress" && <CompressTab />}
-            {activeTab === "convert" && <ConvertTab />}
-            {activeTab === "resize" && <ResizeTab />}
-            {activeTab === "crop" && <CropTab />}
-            {activeTab === "optimize" && <OptimizeTab />}
-            {activeTab === "watermark" && <WatermarkTab />}
-            {activeTab === "strip" && <ExifStripTab />}
-            {activeTab === "pdf-toolkit" && <PdfWorkbenchTab />}
-            {activeTab === "palette" && <PaletteTab />}
-            {activeTab === "favicon" && <FaviconTab />}
-            {activeTab === "animation" && <AnimationTab />}
-            {activeTab === "spritesheet" && <SpriteSheetTab />}
-            {activeTab === "base64" && <Base64Tab />}
-            {activeTab === "qrcode" && <QrCodeTab />}
-            {activeTab === "bulk-rename" && <BulkRenameTab />}
-            {activeTab === "svg-rasterize" && <SvgRasterizeTab />}
-          </div>
-        </main>
-      </div>
+        </Suspense>
+      </WorkbenchShell>
 
       <SplashScreen visible={isLoading} />
       <GlobalProgressBar />
 
-      {showHistory && <HistoryModal onClose={() => setShowHistory(false)} />}
+      <CommandPalette
+        open={cmdOpen}
+        tools={commandTools}
+        onClose={() => setCmdOpen(false)}
+        onNavigate={(id) => {
+          setActiveTab(id);
+          setCmdOpen(false);
+        }}
+      />
+
       {showSettings && (
-        <SettingsPanel
-          onClose={() => setShowSettings(false)}
-          onResetOnboarding={() => {
-            setShowSettings(false);
-            setShowOnboarding(true);
-          }}
-        />
+        <Suspense fallback={null}>
+          <SettingsPanel
+            onClose={() => setShowSettings(false)}
+            onResetOnboarding={() => {
+              setShowSettings(false);
+              setShowOnboarding(true);
+            }}
+          />
+        </Suspense>
       )}
       {showOnboarding && (
-        <OnboardingModal
-          onComplete={() => {
-            setShowOnboarding(false);
-            try {
-              localStorage.setItem("rustine_onboarded", "1");
-            } catch {}
-          }}
-        />
+        <Suspense fallback={null}>
+          <OnboardingModal
+            onComplete={() => {
+              setShowOnboarding(false);
+              try {
+                localStorage.setItem("rustine_onboarded", "1");
+              } catch {}
+            }}
+          />
+        </Suspense>
       )}
 
       <Toaster

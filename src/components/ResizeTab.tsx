@@ -1,17 +1,15 @@
-import { useState, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useState, useCallback, useEffect } from "react";
 import { Scaling } from "lucide-react";
-import { toast } from "sonner";
 import { DropZone } from "./DropZone";
 import { ImageGrid } from "./ImageGrid";
 import { ResultsBanner } from "./ResultsBanner";
 import { ActionButton } from "./ui/ActionButton";
+import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
+import { ControlsPanel } from "./ControlsPanel";
 import { Slider } from "./ui/Slider";
-import { useFileSelection } from "../hooks/useFileSelection";
-import { useWorkspace } from "../hooks/useWorkspace";
-import { useHistory } from "../hooks/useHistory";
+import { useTabProcessor } from "../hooks/useTabProcessor";
 import { useT } from "../i18n/i18n";
-import type { BatchProgress, ProcessingResult, ResizeMode } from "../types";
+import type { ResizeMode } from "../types";
 
 const MODE_KEYS: { value: ResizeMode; labelKey: string }[] = [
   { value: "percentage", labelKey: "label.percentage" },
@@ -31,87 +29,73 @@ const PRESETS: { labelKey: string; w: number; h: number }[] = [
 
 export function ResizeTab() {
   const { t } = useT();
-  const { files, addFiles, removeFile, clearFiles, reorderFiles } = useFileSelection();
-  const { getOutputDir } = useWorkspace();
-  const { addEntry } = useHistory();
+  const {
+    files,
+    removeFile,
+    reorderFiles,
+    handleFilesSelected,
+    handleClearFiles,
+    loading,
+    results,
+    lastOutputDir,
+    process,
+  } = useTabProcessor({ tabId: "resize", command: "resize_images" });
   const [mode, setMode] = useState<ResizeMode>("percentage");
   const [width, setWidth] = useState(800);
   const [height, setHeight] = useState(600);
   const [percentage, setPercentage] = useState(50);
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<ProcessingResult[]>([]);
-  const [lastOutputDir, setLastOutputDir] = useState("");
+  const [panelMode, setPanelMode] = useState<MaterialMode>("material");
 
-  const handleFilesSelected = useCallback(
-    (paths: string[]) => {
-      addFiles(paths);
-      setResults([]);
-    },
-    [addFiles],
-  );
-
-  const handleClearFiles = useCallback(() => {
-    clearFiles();
-    setResults([]);
-  }, [clearFiles]);
+  // Show results after a run, fall back to material when the list is cleared.
+  // Guarded by !loading so an in-flight run (which clears results first) does not
+  // flash the material view before the new results arrive.
+  useEffect(() => {
+    if (!loading) setPanelMode(results.length > 0 ? "results" : "material");
+  }, [results, loading]);
 
   const handleResize = useCallback(async () => {
-    if (files.length === 0) {
-      toast.error(t("toast.select_images"));
-      return;
-    }
-    const outputDir = await getOutputDir("resize");
-    if (!outputDir) {
-      toast.error(t("toast.workspace_missing"));
-      return;
-    }
+    await process({
+      extraParams: { mode, width, height, percentage },
+      successMessage: t("toast.resize_success", { n: files.length }),
+    });
+  }, [process, mode, width, height, percentage, files.length, t]);
 
-    setLoading(true);
-    setResults([]);
-    setLastOutputDir(outputDir);
-
-    try {
-      const result = await invoke<BatchProgress>("resize_images", {
-        inputPaths: files,
-        mode,
-        width,
-        height,
-        percentage,
-        outputDir,
-      });
-
-      setResults(result.results);
-
-      const successCount = result.results.filter((r) => r.success).length;
-      const failCount = result.results.filter((r) => !r.success).length;
-      addEntry({ tabId: "resize", filesCount: result.total, successCount, failCount, outputDir });
-
-      if (result.completed === result.total) {
-        toast.success(t("toast.resize_success", { n: result.completed }));
-      } else if (result.completed > 0) {
-        toast.warning(t("toast.partial", { completed: result.completed, total: result.total }));
-      } else {
-        toast.error(t("toast.all_failed"));
-      }
-    } catch (err) {
-      toast.error(t("toast.operation_failed"));
-    } finally {
-      setLoading(false);
-    }
-  }, [files, mode, width, height, percentage, getOutputDir, addEntry, t]);
+  const isEmpty = files.length === 0;
 
   return (
-    <div className="space-y-5">
-      <DropZone
-        accept="png,jpg,jpeg,bmp,ico,tiff,tif,webp,gif"
-        label={t("dropzone.images_resize")}
-        sublabel={t("dropzone.sublabel_resize")}
-        onFilesSelected={handleFilesSelected}
+    <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+      <MaterialPanel
+        mode={panelMode}
+        onModeChange={setPanelMode}
+        hasResults={results.length > 0}
+        material={
+          <div className="space-y-3">
+            <DropZone
+              accept="png,jpg,jpeg,bmp,ico,tiff,tif,webp,gif"
+              label={isEmpty ? t("dropzone.images_resize") : t("dropzone.add_more")}
+              sublabel={t("dropzone.sublabel_resize")}
+              compact={!isEmpty}
+              onFilesSelected={handleFilesSelected}
+            />
+            <ImageGrid files={files} onReorder={reorderFiles} onRemove={removeFile} onClear={handleClearFiles} />
+          </div>
+        }
+        results={<ResultsBanner results={results} total={files.length} outputDir={lastOutputDir} sourceTab="resize" />}
       />
 
-      <ImageGrid files={files} onReorder={reorderFiles} onRemove={removeFile} onClear={handleClearFiles} />
-
-      <div className="space-y-3">
+      <ControlsPanel
+        disabled={isEmpty}
+        action={
+          <ActionButton
+            onClick={handleResize}
+            disabled={isEmpty}
+            loading={loading}
+            loadingText={t("status.resizing")}
+            text={isEmpty ? t("action.resize") : t("action.resize_n", { n: files.length })}
+            icon={<Scaling className="h-4 w-4" strokeWidth={1.5} />}
+          />
+        }
+      >
         <div className="flex gap-2 flex-wrap">
           {MODE_KEYS.map((opt) => (
             <button
@@ -186,18 +170,7 @@ export function ResizeTab() {
             <span className="forge-hint">{t("label.px")}</span>
           </div>
         )}
-      </div>
-
-      <ActionButton
-        onClick={handleResize}
-        disabled={files.length === 0}
-        loading={loading}
-        loadingText={t("status.resizing")}
-        text={files.length > 0 ? t("action.resize_n", { n: files.length }) : t("action.resize")}
-        icon={<Scaling className="h-4 w-4" strokeWidth={1.5} />}
-      />
-
-      <ResultsBanner results={results} total={files.length} outputDir={lastOutputDir} />
+      </ControlsPanel>
     </div>
   );
 }

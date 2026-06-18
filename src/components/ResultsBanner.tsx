@@ -1,18 +1,22 @@
-import { useMemo, useState, useCallback, memo } from "react";
-import { CheckCircle, AlertCircle, XCircle, ZoomIn, FolderOpen } from "lucide-react";
+import { useMemo, useState, useCallback, useEffect, useRef, memo } from "react";
+import { CheckCircle, AlertCircle, XCircle, ZoomIn, FolderOpen, ArrowRight, Loader2 } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { formatSize, isImage, safeAssetUrl } from "../lib/utils";
+import { useLazyThumbnails } from "../hooks/useLazyThumbnails";
 import { BeforeAfterSlider } from "./ui/BeforeAfterSlider";
 import { useT } from "../i18n/i18n";
-import type { ProcessingResult } from "../types";
+import { useChainHandoff } from "../hooks/useChainHandoff";
+import { compatibleChainTargets } from "../lib/chain";
+import type { ProcessingResult, TabId } from "../types";
 
 interface ResultsBannerProps {
   results: ProcessingResult[];
   total: number;
   outputDir?: string;
+  sourceTab?: TabId;
 }
 
-export const ResultsBanner = memo(function ResultsBanner({ results, total, outputDir }: ResultsBannerProps) {
+export const ResultsBanner = memo(function ResultsBanner({ results, total, outputDir, sourceTab }: ResultsBannerProps) {
   const { t } = useT();
   const [previewResult, setPreviewResult] = useState<ProcessingResult | null>(null);
 
@@ -23,11 +27,51 @@ export const ResultsBanner = memo(function ResultsBanner({ results, total, outpu
   const successResults = results.filter((r) => r.success);
 
   const sizeStats = useMemo(() => {
-    const totalInput = successResults.reduce((acc, r) => acc + r.input_size, 0);
-    const totalOutput = successResults.reduce((acc, r) => acc + r.output_size, 0);
+    const ok = results.filter((r) => r.success);
+    const totalInput = ok.reduce((acc, r) => acc + r.input_size, 0);
+    const totalOutput = ok.reduce((acc, r) => acc + r.output_size, 0);
     const saved = totalInput > 0 ? (1 - totalOutput / totalInput) * 100 : 0;
     return { totalInput, totalOutput, saved };
   }, [results]);
+
+  // Per-result cache-buster: changes once per new result set so re-runs that
+  // overwrite the same output path bypass the webview's stale image cache.
+  const bust = useMemo(() => Date.now(), [results]);
+
+  // Output-grid thumbnails, fetched lazily as tiles scroll into view (observer
+  // below). Keyed on `bust` so a re-run that reuses output paths regenerates.
+  const outputPaths = useMemo(() => results.filter((r) => r.success).map((r) => r.output_path), [results]);
+  const { thumbs, request } = useLazyThumbnails(bust);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const tileEls = useRef<Map<string, HTMLElement>>(new Map());
+
+  const { requestChain } = useChainHandoff();
+  const chainTargets = useMemo(() => {
+    if (!sourceTab) return [];
+    const exts = Array.from(
+      new Set(outputPaths.map((p) => p.split(".").pop()?.toLowerCase()).filter((e): e is string => !!e)),
+    );
+    return compatibleChainTargets(sourceTab, exts);
+  }, [sourceTab, outputPaths]);
+
+  // Fetch a tile's thumbnail only once it scrolls near the viewport.
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || outputPaths.length === 0) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .map((e) => (e.target as HTMLElement).dataset.path)
+          .filter((p): p is string => !!p);
+        if (visible.length > 0) request(visible);
+      },
+      { root, rootMargin: "200px 0px", threshold: 0.01 },
+    );
+    tileEls.current.forEach((el) => obs.observe(el));
+    return () => obs.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outputPaths, request]);
 
   if (results.length === 0) return null;
 
@@ -81,6 +125,7 @@ export const ResultsBanner = memo(function ResultsBanner({ results, total, outpu
 
         {successResults.length > 0 && (
           <div
+            ref={scrollRef}
             className="max-h-56 overflow-y-auto pr-1"
             style={{
               display: "grid",
@@ -91,23 +136,51 @@ export const ResultsBanner = memo(function ResultsBanner({ results, total, outpu
             {successResults.map((r, i) => {
               const outName = r.output_path.split(/[\\/]/).pop() || "";
               const canPreview = isImage(r.output_path);
+              const thumb = thumbs.get(r.output_path);
+              // Prefer the thumbnail; fall back to the original only when the
+              // backend couldn't rasterize it (null); render a placeholder while
+              // it is still being generated (undefined).
+              const previewSrc = thumb != null ? thumb : thumb === null ? safeAssetUrl(r.output_path, bust) : undefined;
               return (
                 <div
                   key={i}
+                  data-path={r.output_path}
+                  ref={(el) => {
+                    if (el) tileEls.current.set(r.output_path, el);
+                    else tileEls.current.delete(r.output_path);
+                  }}
                   className="group relative overflow-hidden aspect-square cursor-pointer"
-                  style={{ borderRadius: 8, border: "1px solid var(--bg-border)", background: "var(--bg-overlay)" }}
+                  style={{
+                    borderRadius: 8,
+                    border: "1px solid var(--bg-border)",
+                    background: "var(--bg-overlay)",
+                    contentVisibility: "auto",
+                    containIntrinsicSize: "auto 120px",
+                  }}
                   onClick={() => canPreview && setPreviewResult(r)}
                 >
-                  {canPreview ? (
+                  {canPreview && previewSrc ? (
                     <img
-                      src={safeAssetUrl(r.output_path, true)}
+                      src={previewSrc}
                       alt={outName}
-                      loading="lazy"
+                      decoding="async"
                       className="h-full w-full object-cover"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";
                       }}
                     />
+                  ) : canPreview ? (
+                    <div
+                      className="h-full w-full flex items-center justify-center"
+                      style={{ background: "var(--bg-elevated)" }}
+                      aria-hidden
+                    >
+                      <Loader2
+                        className="h-4 w-4 animate-spin"
+                        style={{ color: "var(--text-tertiary)" }}
+                        strokeWidth={1.5}
+                      />
+                    </div>
                   ) : (
                     <div className="h-full w-full flex items-center justify-center">
                       <CheckCircle className="h-5 w-5 text-green-400/50" strokeWidth={1.5} />
@@ -151,6 +224,30 @@ export const ResultsBanner = memo(function ResultsBanner({ results, total, outpu
                   </span>
                 </div>
               ))}
+          </div>
+        )}
+
+        {succeeded > 0 && chainTargets.length > 0 && (
+          <div
+            className="flex items-center gap-2 flex-wrap"
+            style={{ borderTop: "1px solid var(--bg-border)", paddingTop: 12 }}
+          >
+            <span
+              className="inline-flex items-center gap-1"
+              style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", color: "var(--indigo-core)" }}
+            >
+              {t("chain.next")}
+              <ArrowRight className="h-3.5 w-3.5" strokeWidth={2} />
+            </span>
+            {chainTargets.map((target) => {
+              const Icon = target.icon;
+              return (
+                <button key={target.id} onClick={() => requestChain(target.id, outputPaths)} className="btn-ghost">
+                  <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  {t(target.labelKey)}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

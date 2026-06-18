@@ -30,7 +30,7 @@ TypeScript has no dedicated lint/test commands. Type-checking runs implicitly vi
 
 ## Architecture
 
-Rust-ine is a Tauri v2 desktop app. The frontend is a React SPA; the backend is a Rust library (`src-tauri/`) that exposes Tauri commands.
+Flint is a Tauri v2 desktop app. The frontend is a React SPA; the backend is a Rust library (`src-tauri/`) that exposes Tauri commands.
 
 ### Frontend (`src/`)
 

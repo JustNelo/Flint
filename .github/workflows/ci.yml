@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - main
+  # Callable so the Release workflow can reuse this exact suite as a gate.
+  workflow_call:
+
+# A newer push to the same ref cancels in-flight checks (saves runner time).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Checks never need write access.
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint & test (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - windows-latest
+          - ubuntu-22.04
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-flint
+        with:
+          rust-components: clippy, rustfmt
+
+      - name: Rust format check
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: Clippy (all targets, deny warnings)
+        working-directory: src-tauri
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Rust tests
+        working-directory: src-tauri
+        run: cargo test --locked
+
+      - name: Frontend build (type-check + production bundle)
+        run: bun run build
+
+      - name: Frontend format check
+        run: bun run format:check
+
+      - name: Frontend tests
+        run: bun run test
+
+  # Full release-mode build (no bundling, so no signing secrets needed) on the
+  # integration branches only. Guarantees develop/main always compile before a
+  # release tag is ever cut. PRs stay fast (checks only); tags skip this because
+  # the Release workflow does the real bundled build.
+  build-smoke:
+    name: Build smoke (${{ matrix.platform }})
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - windows-latest
+          - ubuntu-22.04
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 45
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-flint
+
+      - name: Build app (release, no bundle)
+        run: bun run tauri build --no-bundle

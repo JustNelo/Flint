@@ -1,4 +1,4 @@
-name: Build & Release
+name: Release
 
 on:
   push:
@@ -6,11 +6,24 @@ on:
       - "v*"
   workflow_dispatch:
 
+# Never cancel an in-flight release.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
 jobs:
+  # Run the full CI suite (both OSes) first, so a tag can never produce a
+  # release from code that doesn't pass every check.
+  verify:
+    name: Verify
+    uses: ./.github/workflows/ci.yml
+
   build:
+    name: Build & release (${{ matrix.platform }})
+    needs: verify
     strategy:
       fail-fast: false
       matrix:
@@ -19,84 +32,17 @@ jobs:
             args: ""
           - platform: ubuntu-22.04
             args: ""
-
     runs-on: ${{ matrix.platform }}
     environment: Tauri
-
+    timeout-minutes: 60
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Linux system dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Setup build environment
+        uses: ./.github/actions/setup-flint
 
-      # pdfium binaries are downloaded at build time rather than tracked in git
-      # (each is ~6 MB and bumps the repo size on every pdfium version bump).
-      # Both binaries must exist on every runner because tauri.conf.json lists
-      # them in bundle.resources unconditionally — the build-script verifies
-      # presence regardless of the target platform.
-      # Source: https://github.com/bblanchon/pdfium-binaries
-      - name: Fetch pdfium binaries
-        shell: bash
-        run: |
-          set -euo pipefail
-          # NOTE: bsdtar (Windows) and GNU tar both interpret arguments containing
-          # a colon as `host:path`, so passing $RUNNER_TEMP (e.g. D:\a\_temp\...)
-          # to tar fails with "Cannot connect to D:". Work from the repo root
-          # with relative paths instead.
-          mkdir -p src-tauri/resources tmp-pdfium
-
-          if [ ! -f "src-tauri/resources/pdfium.dll" ]; then
-            echo "Fetching pdfium.dll..."
-            curl -sL -o tmp-pdfium/win.tgz \
-              "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-win-x64.tgz"
-            mkdir -p tmp-pdfium/win
-            tar -xzf tmp-pdfium/win.tgz -C tmp-pdfium/win
-            cp tmp-pdfium/win/bin/pdfium.dll src-tauri/resources/pdfium.dll
-          fi
-
-          if [ ! -f "src-tauri/resources/libpdfium.so" ]; then
-            echo "Fetching libpdfium.so..."
-            curl -sL -o tmp-pdfium/linux.tgz \
-              "https://github.com/bblanchon/pdfium-binaries/releases/latest/download/pdfium-linux-x64.tgz"
-            mkdir -p tmp-pdfium/linux
-            tar -xzf tmp-pdfium/linux.tgz -C tmp-pdfium/linux
-            cp tmp-pdfium/linux/lib/libpdfium.so src-tauri/resources/libpdfium.so
-          fi
-
-          rm -rf tmp-pdfium
-          ls -la src-tauri/resources/
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: "./src-tauri -> target"
-
-      - name: Rust lint (clippy + fmt)
-        working-directory: src-tauri
-        run: |
-          cargo fmt --check
-          cargo clippy -- -D warnings
-
-      - name: Rust tests
-        working-directory: src-tauri
-        run: cargo test
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Install frontend dependencies
-        run: bun install
-
-      - name: Build Tauri app
+      - name: Build & publish Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -104,8 +50,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
-          releaseName: "Rust-ine v__VERSION__"
-          releaseBody: "See the assets below to download and install Rust-ine."
+          releaseName: "Flint v__VERSION__"
+          releaseBody: "See the assets below to download and install Flint."
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

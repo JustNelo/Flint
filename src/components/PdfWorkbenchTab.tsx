@@ -1,20 +1,18 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   FileUp,
   Scissors,
   Image,
   FileDown,
+  Lock,
   Unlock,
-  Plus,
   Trash2,
   Upload,
   CheckCircle,
   XCircle,
   Zap,
   Shield,
-  Loader2,
   AlertTriangle,
   FolderOpen,
   Stamp,
@@ -25,7 +23,9 @@ import { toast } from "sonner";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { cn, formatSize, safeAssetUrl } from "../lib/utils";
 import { PdfPageGrid } from "./PdfPageGrid";
-import { PdfUnlockPanel } from "./PdfUnlockPanel";
+import { DropZone } from "./DropZone";
+import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
+import { ControlsPanel } from "./ControlsPanel";
 import { ActionButton } from "./ui/ActionButton";
 import { Slider } from "./ui/Slider";
 import { useWorkspace } from "../hooks/useWorkspace";
@@ -40,8 +40,6 @@ import {
   type WorkbenchResult,
 } from "../hooks/usePdfWorkbench";
 import type { PdfWatermarkPosition } from "../types";
-
-const ACCEPTED_EXTENSIONS = new Set(["png", "jpg", "jpeg", "bmp", "ico", "tiff", "tif", "webp", "pdf"]);
 
 // --- Password strength helper ---
 function getPasswordStrength(pw: string): { level: number; label: string; color: string } {
@@ -109,6 +107,7 @@ export function PdfWorkbenchTab() {
     loading,
     loadingThumbnails,
     result,
+    setResult,
     gridModified,
     pipelineStep,
     addFiles,
@@ -122,6 +121,17 @@ export function PdfWorkbenchTab() {
 
   // Mode: "workbench" (grid + actions) or "unlock" (standalone)
   const [mode, setMode] = useState<"workbench" | "unlock">("workbench");
+  const [panelMode, setPanelMode] = useState<MaterialMode>("material");
+
+  const switchMode = (next: "workbench" | "unlock") => {
+    setMode(next);
+    setResult(null);
+    setPanelMode("material");
+  };
+
+  useEffect(() => {
+    if (!loading) setPanelMode(result ? "results" : "material");
+  }, [result, loading]);
 
   // Primary action
   const [activeTool, setActiveTool] = useState<PrimaryAction>("build");
@@ -165,66 +175,6 @@ export function PdfWorkbenchTab() {
 
   // Show post-processing options only for PDF-output actions
   const showPostProcessing = PDF_OUTPUT_ACTIONS.has(activeTool);
-
-  // Window-level drag-drop listener
-  const filterPaths = useMemo(() => {
-    return (paths: string[]) =>
-      paths.filter((p) => {
-        const ext = p.split(".").pop()?.toLowerCase() || "";
-        return ACCEPTED_EXTENSIONS.has(ext);
-      });
-  }, []);
-
-  useEffect(() => {
-    const appWindow = getCurrentWindow();
-    const unlisten = appWindow.onDragDropEvent((event) => {
-      if (event.payload.type === "drop") {
-        const filtered = filterPaths(event.payload.paths);
-        if (filtered.length > 0) {
-          if (mode === "unlock") {
-            const pdfs = filtered.filter((p) => p.toLowerCase().endsWith(".pdf"));
-            if (pdfs.length > 0) setUnlockFile(pdfs[0]);
-          } else {
-            addFiles(filtered);
-          }
-        }
-      }
-    });
-    return () => {
-      unlisten.then((fn) => fn());
-    };
-  }, [filterPaths, addFiles, mode]);
-
-  const handleAddMore = useCallback(async () => {
-    try {
-      const selected = await open({
-        multiple: true,
-        filters: [
-          {
-            name: "Images & PDFs",
-            extensions: ["png", "jpg", "jpeg", "bmp", "ico", "tiff", "tif", "webp", "pdf"],
-          },
-        ],
-      });
-      if (!selected) return;
-      const paths = Array.isArray(selected) ? selected : [selected];
-      if (paths.length > 0) addFiles(paths);
-    } catch (err) {
-      toast.error(t("toast.file_open_failed"));
-    }
-  }, [addFiles, t]);
-
-  const handleSelectUnlockFile = useCallback(async () => {
-    try {
-      const selected = await open({
-        multiple: false,
-        filters: [{ name: "PDF", extensions: ["pdf"] }],
-      });
-      if (selected && typeof selected === "string") setUnlockFile(selected);
-    } catch (err) {
-      toast.error(t("toast.file_open_failed"));
-    }
-  }, [t]);
 
   const handleSelectWmLogo = useCallback(async () => {
     try {
@@ -303,15 +253,6 @@ export function PdfWorkbenchTab() {
     await unlockPdf(unlockFile, unlockPassword, outputDir);
   }, [unlockFile, unlockPassword, getOutputDir, unlockPdf]);
 
-  // Wraps ResultPanel so child components can render it without re-passing `t`.
-  const ResultPanelBound = useMemo(
-    () =>
-      function BoundResultPanel({ result: r }: { result: WorkbenchResult | null }) {
-        return <ResultPanel result={r} t={t} />;
-      },
-    [t],
-  );
-
   // --- Disable logic ---
   const isExecuteDisabled = useMemo(() => {
     if (loading) return true;
@@ -364,519 +305,509 @@ export function PdfWorkbenchTab() {
     return steps;
   }, [activeTool, ppCompress, ppProtect, showPostProcessing, t]);
 
-  return (
-    <div className="space-y-5">
-      {/* Mode switcher: Workbench / Unlock */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => setMode("workbench")}
-          className={cn("btn-toggle", mode === "workbench" && "btn-toggle-active")}
-        >
-          {t("pdf_tool.workbench_mode")}
-        </button>
-        <button
-          onClick={() => setMode("unlock")}
-          className={cn("btn-toggle", mode === "unlock" && "btn-toggle-active")}
-        >
-          <Unlock className="h-3.5 w-3.5" strokeWidth={1.5} />
-          {t("pdf_tool.unlock_mode")}
-        </button>
-      </div>
+  const pageMaterial = (
+    <div className="space-y-3">
+      <DropZone
+        accept="png,jpg,jpeg,bmp,ico,tiff,tif,webp,pdf"
+        label={pages.length === 0 ? t("dropzone.pdf_workbench") : t("dropzone.add_more")}
+        sublabel={t("dropzone.sublabel_pdf_workbench")}
+        compact={pages.length > 0}
+        onFilesSelected={addFiles}
+      />
 
-      {/* ========== UNLOCK MODE ========== */}
-      {mode === "unlock" && (
-        <PdfUnlockPanel
-          unlockFile={unlockFile}
-          unlockPassword={unlockPassword}
-          loading={loading}
-          result={result}
-          onSelectFile={handleSelectUnlockFile}
-          onPasswordChange={setUnlockPassword}
-          onUnlock={handleUnlock}
-          ResultPanel={ResultPanelBound}
-          t={t}
-        />
+      {pages.length > 0 && (
+        <div className="flex items-center gap-2">
+          {gridModified && (
+            <span className="flex items-center gap-1 text-[10px] text-amber-400">
+              <AlertTriangle className="h-3 w-3" strokeWidth={1.5} />
+              {t("pdf_tool.grid_modified")}
+            </span>
+          )}
+          <span className="text-[10px] text-neutral-500 ml-auto">
+            {pages.length} {t("pdf_tool.pages_count")}
+          </span>
+          <button onClick={clearAll} className="btn-ghost">
+            <Trash2 className="h-3 w-3" strokeWidth={1.5} />
+            {t("label.clear_all")}
+          </button>
+        </div>
       )}
 
-      {/* ========== WORKBENCH MODE ========== */}
-      {mode === "workbench" && (
-        <>
-          {/* Drop zone / Add files bar */}
-          {pages.length === 0 ? (
-            <div
-              onClick={handleAddMore}
-              className="relative flex flex-col items-center justify-center gap-3 p-8 cursor-pointer"
-              style={{
-                borderRadius: 16,
-                border: "2px dashed var(--bg-border)",
-                background: "var(--bg-overlay)",
-                transition: "all 200ms ease",
-              }}
+      {/* Page grid */}
+      <PdfPageGrid pages={pages} loadingThumbnails={loadingThumbnails} onReorder={reorderPages} onRemove={removePage} />
+    </div>
+  );
+
+  const unlockMaterial = (
+    <div className="space-y-3">
+      <DropZone
+        accept="pdf"
+        multiple={false}
+        label={t("pdf_tool.drop_locked_pdf")}
+        sublabel={t("pdf_tool.drop_locked_pdf_hint")}
+        compact={!!unlockFile}
+        onFilesSelected={(paths) => {
+          if (paths[0]) setUnlockFile(paths[0]);
+        }}
+      />
+
+      {unlockFile && (
+        <div className="forge-card p-4">
+          <div className="flex items-center gap-2">
+            <Lock className="h-4 w-4" style={{ color: "var(--text-tertiary)" }} strokeWidth={1.5} />
+            <span
+              className="truncate"
+              style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}
             >
-              <div
-                className="flex h-12 w-12 items-center justify-center rounded-full"
-                style={{ background: "var(--bg-elevated)", color: "var(--text-tertiary)" }}
-              >
-                <Upload className="h-6 w-6" strokeWidth={1.5} />
-              </div>
-              <div className="text-center">
-                <p style={{ fontSize: "var(--text-base)", fontWeight: 500, color: "var(--text-primary)" }}>
-                  {t("dropzone.pdf_workbench")}
-                </p>
-                <p className="mt-1 text-xs text-neutral-500">{t("dropzone.sublabel_pdf_workbench")}</p>
-              </div>
-            </div>
+              {unlockFile.split(/[\\/]/).pop()}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+      <MaterialPanel
+        mode={panelMode}
+        onModeChange={setPanelMode}
+        hasResults={result !== null}
+        materialLabel={mode === "workbench" ? t("etabli.pages") : t("pdf_tool.unlock_mode")}
+        material={mode === "workbench" ? pageMaterial : unlockMaterial}
+        results={<ResultPanel result={result} t={t} />}
+      />
+
+      <ControlsPanel
+        disabled={mode === "workbench" ? pages.length === 0 : !unlockFile}
+        action={
+          mode === "workbench" ? (
+            <ActionButton
+              onClick={handleExecute}
+              disabled={isExecuteDisabled}
+              loading={loading}
+              loadingText={actionButtonText.loadingText}
+              text={actionButtonText.text}
+              icon={actionIcon}
+            />
           ) : (
-            <div className="flex items-center gap-2">
-              <button onClick={handleAddMore} className="btn-ghost">
-                <Plus className="h-4 w-4" strokeWidth={1.5} />
-                {t("label.add_files")}
-              </button>
-              {/* Grid modified indicator */}
-              {gridModified && (
-                <span className="flex items-center gap-1 text-[10px] text-amber-400">
-                  <AlertTriangle className="h-3 w-3" strokeWidth={1.5} />
-                  {t("pdf_tool.grid_modified")}
-                </span>
-              )}
-              <span className="text-[10px] text-neutral-500 ml-auto">
-                {pages.length} {t("pdf_tool.pages_count")}
-              </span>
-              <button onClick={clearAll} className="btn-ghost">
-                <Trash2 className="h-3 w-3" strokeWidth={1.5} />
-                {t("label.clear_all")}
-              </button>
-            </div>
-          )}
+            <ActionButton
+              onClick={handleUnlock}
+              disabled={loading || !unlockFile || !unlockPassword.trim()}
+              loading={loading}
+              loadingText={t("status.unlocking_pdf")}
+              text={t("action.unlock_pdf")}
+              icon={<Unlock className="h-4 w-4" strokeWidth={1.5} />}
+            />
+          )
+        }
+      >
+        <div className="flex gap-2">
+          <button
+            onClick={() => switchMode("workbench")}
+            className={cn("btn-toggle", mode === "workbench" && "btn-toggle-active")}
+          >
+            {t("pdf_tool.workbench_mode")}
+          </button>
+          <button
+            onClick={() => switchMode("unlock")}
+            className={cn("btn-toggle", mode === "unlock" && "btn-toggle-active")}
+          >
+            <Unlock className="h-3.5 w-3.5" strokeWidth={1.5} />
+            {t("pdf_tool.unlock_mode")}
+          </button>
+        </div>
 
-          {/* Page grid */}
-          <PdfPageGrid
-            pages={pages}
-            loadingThumbnails={loadingThumbnails}
-            onReorder={reorderPages}
-            onRemove={removePage}
-          />
-
-          {/* Action selector + options (only when pages loaded) */}
-          {pages.length > 0 && (
-            <>
-              {/* Primary action selector */}
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-2">
-                  {t("pdf_tool.primary_action")}
-                </p>
-                <div className="grid grid-cols-5 gap-2">
-                  {PRIMARY_ACTIONS.map((action) => {
-                    const Icon = action.icon;
-                    const isActive = activeTool === action.id;
-                    return (
-                      <button
-                        key={action.id}
-                        onClick={() => setActiveTool(action.id)}
-                        className={cn(
-                          "btn-toggle flex-col gap-1.5! py-3! text-[11px]!",
-                          isActive && "btn-toggle-active",
-                        )}
-                      >
-                        <Icon className={cn("h-4 w-4")} strokeWidth={1.5} />
-                        {t(action.labelKey)}
-                      </button>
-                    );
-                  })}
-                </div>
+        {mode === "workbench" ? (
+          <>
+            {/* Primary action selector */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500 mb-2">
+                {t("pdf_tool.primary_action")}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {PRIMARY_ACTIONS.map((action) => {
+                  const Icon = action.icon;
+                  const isActive = activeTool === action.id;
+                  return (
+                    <button
+                      key={action.id}
+                      onClick={() => setActiveTool(action.id)}
+                      className={cn("btn-toggle flex-col gap-1.5! py-3! text-[11px]!", isActive && "btn-toggle-active")}
+                    >
+                      <Icon className={cn("h-4 w-4")} strokeWidth={1.5} />
+                      {t(action.labelKey)}
+                    </button>
+                  );
+                })}
               </div>
+            </div>
 
-              {/* Dynamic options panel */}
-              <div className="forge-card p-4 space-y-4">
-                {activeTool === "build" && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium uppercase tracking-widest text-neutral-500">
-                      {t("label.filename")}
-                    </label>
-                    <input
-                      type="text"
-                      value={outputName}
-                      onChange={(e) => setOutputName(e.target.value)}
-                      placeholder={t("label.placeholder_filename")}
-                      className="forge-input w-full"
-                    />
-                  </div>
-                )}
-
-                {activeTool === "split" && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-medium uppercase tracking-widest text-neutral-500">
-                      {t("label.page_ranges")}
-                    </label>
-                    <input
-                      type="text"
-                      value={ranges}
-                      onChange={(e) => setRanges(e.target.value)}
-                      placeholder="1-3, 4-10, 11-end"
-                      className="forge-input w-full"
-                    />
-                    <p className="text-[10px] text-neutral-500">{t("label.page_ranges_hint")}</p>
-                  </div>
-                )}
-
-                {activeTool === "export-images" && (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-2 block">
-                        {t("label.output_format_images")}
-                      </label>
-                      <div className="flex gap-2">
-                        {(["png", "jpg"] as ExportFormat[]).map((f) => (
-                          <button
-                            key={f}
-                            onClick={() => setExportFormat(f)}
-                            className={cn("btn-toggle uppercase", exportFormat === f && "btn-toggle-active")}
-                          >
-                            {f}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-2 block">
-                        {t("label.dpi")}
-                      </label>
-                      <div className="flex gap-2">
-                        {([72, 150, 300] as ExportDpi[]).map((d) => (
-                          <button
-                            key={d}
-                            onClick={() => setExportDpi(d)}
-                            className={cn("btn-toggle", exportDpi === d && "btn-toggle-active")}
-                          >
-                            {t("label.dpi_value", { n: d })}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeTool === "extract-images" && (
-                  <p className="text-xs text-neutral-500">{t("pdf_tool.extract_images_hint")}</p>
-                )}
-
-                {activeTool === "watermark" && (
-                  <div className="space-y-3">
-                    {/* Text / Image toggle */}
-                    <div className="flex gap-2">
-                      {(["text", "image"] as PdfWmMode[]).map((m) => (
-                        <button
-                          key={m}
-                          onClick={() => updateWm("mode", m)}
-                          className={cn("btn-toggle", wm.mode === m && "btn-toggle-active")}
-                        >
-                          {m === "text" ? (
-                            <Type className="h-3.5 w-3.5" strokeWidth={1.5} />
-                          ) : (
-                            <ImageIcon className="h-3.5 w-3.5" strokeWidth={1.5} />
-                          )}
-                          {m === "text" ? t("label.watermark_text_mode") : t("label.watermark_image_mode")}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Text-specific */}
-                    {wm.mode === "text" && (
-                      <>
-                        <div>
-                          <label className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-1 block">
-                            {t("label.watermark_text")}
-                          </label>
-                          <input
-                            type="text"
-                            value={wm.text}
-                            onChange={(e) => updateWm("text", e.target.value)}
-                            placeholder={t("label.placeholder_watermark")}
-                            className="forge-input w-full"
-                          />
-                        </div>
-                        <Slider
-                          label={t("label.font_size")}
-                          value={wm.fontSize}
-                          min={8}
-                          max={200}
-                          unit="px"
-                          onChange={(v) => updateWm("fontSize", v)}
-                        />
-                        <div>
-                          <label className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-1 block">
-                            {t("label.watermark_color")}
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <label className="relative cursor-pointer">
-                              <input
-                                type="color"
-                                value={wm.color}
-                                onChange={(e) => updateWm("color", e.target.value)}
-                                className="absolute inset-0 opacity-0 w-0 h-0 cursor-pointer"
-                              />
-                              <div
-                                className="h-8 w-8 cursor-pointer"
-                                style={{
-                                  borderRadius: 6,
-                                  border: "1px solid var(--bg-border)",
-                                  transition: "border-color 150ms ease",
-                                  backgroundColor: wm.color,
-                                }}
-                              />
-                            </label>
-                            <input
-                              type="text"
-                              value={wm.color}
-                              onChange={(e) => updateWm("color", e.target.value)}
-                              maxLength={7}
-                              className="forge-input"
-                              style={{ width: 96, flex: "none", fontFamily: "var(--font-mono)" }}
-                            />
-                          </div>
-                        </div>
-                      </>
-                    )}
-
-                    {/* Image-specific */}
-                    {wm.mode === "image" && (
-                      <>
-                        <div>
-                          <label className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-1 block">
-                            {t("label.watermark_logo")}
-                          </label>
-                          <button
-                            onClick={handleSelectWmLogo}
-                            className="flex items-center gap-2 w-full px-3 py-3 cursor-pointer"
-                            style={{
-                              borderRadius: 8,
-                              border: "1px dashed var(--bg-border)",
-                              background: "var(--bg-overlay)",
-                              fontSize: "var(--text-sm)",
-                              color: "var(--text-secondary)",
-                              transition: "all 150ms ease",
-                            }}
-                          >
-                            <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />
-                            {wm.logoPath ? wm.logoPath.split(/[\\/]/).pop() : t("label.select_logo")}
-                          </button>
-                          {wm.logoPath && (
-                            <div
-                              className="mt-2 flex items-center gap-2 p-2"
-                              style={{
-                                borderRadius: 8,
-                                border: "1px solid var(--bg-border)",
-                                background: "var(--bg-overlay)",
-                              }}
-                            >
-                              <img
-                                src={safeAssetUrl(wm.logoPath)}
-                                alt="Logo"
-                                className="h-8 w-8 rounded object-contain"
-                                style={{ background: "var(--bg-elevated)" }}
-                              />
-                              <span className="text-[10px] text-neutral-500 truncate flex-1">
-                                {wm.logoPath.split(/[\\/]/).pop()}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <Slider
-                          label={t("label.watermark_scale")}
-                          value={wm.scale}
-                          min={5}
-                          max={80}
-                          unit="%"
-                          onChange={(v) => updateWm("scale", v)}
-                        />
-                      </>
-                    )}
-
-                    {/* Position */}
-                    <div>
-                      <label className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-1.5 block">
-                        {t("label.position")}
-                      </label>
-                      <div className="flex gap-2 flex-wrap">
-                        {PDF_WM_POSITIONS.map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => updateWm("position", opt.value)}
-                            className={cn("btn-toggle", wm.position === opt.value && "btn-toggle-active")}
-                          >
-                            {t(opt.labelKey)}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Opacity */}
-                    <Slider
-                      label={t("label.opacity")}
-                      value={wm.opacity}
-                      min={5}
-                      max={100}
-                      onChange={(v) => updateWm("opacity", v)}
-                    />
-                  </div>
-                )}
-
-                {/* Post-processing toggles (only for PDF output actions) */}
-                {showPostProcessing && (
-                  <div className="pt-3 space-y-3" style={{ borderTop: "1px solid var(--bg-border)" }}>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                      {t("pdf_tool.post_processing")}
-                    </p>
-
-                    {/* Compress toggle */}
-                    <div>
-                      <button
-                        onClick={() => setPpCompress(!ppCompress)}
-                        className={cn("btn-toggle w-full", ppCompress && "btn-toggle-active")}
-                      >
-                        <Zap className="h-3.5 w-3.5" strokeWidth={1.5} />
-                        {t("pdf_tool.compress")}
-                        <div
-                          className={cn(
-                            "ml-auto h-4 w-7 rounded-full transition-all",
-                            ppCompress ? "bg-indigo-400" : "",
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              "h-3 w-3 rounded-full mt-0.5 transition-all",
-                              ppCompress ? "ml-3.5 bg-white" : "ml-0.5",
-                            )}
-                          />
-                        </div>
-                      </button>
-                      {ppCompress && (
-                        <div className="mt-2 pl-2">
-                          <Slider
-                            label={t("label.image_quality_pdf")}
-                            value={ppCompressQuality}
-                            min={10}
-                            max={95}
-                            leftHint={t("label.smaller_file")}
-                            rightHint={t("label.higher_quality")}
-                            onChange={setPpCompressQuality}
-                          />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Protect toggle */}
-                    <div>
-                      <button
-                        onClick={() => setPpProtect(!ppProtect)}
-                        className={cn("btn-toggle w-full", ppProtect && "btn-toggle-active")}
-                      >
-                        <Shield className="h-3.5 w-3.5" strokeWidth={1.5} />
-                        {t("pdf_tool.protect")}
-                        <div
-                          className={cn(
-                            "ml-auto h-4 w-7 rounded-full transition-all",
-                            ppProtect ? "bg-indigo-400" : "",
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              "h-3 w-3 rounded-full mt-0.5 transition-all",
-                              ppProtect ? "ml-3.5 bg-white" : "ml-0.5",
-                            )}
-                          />
-                        </div>
-                      </button>
-                      {ppProtect && (
-                        <div className="mt-2 pl-2 space-y-1.5">
-                          <div
-                            className="flex gap-1.5 items-center text-[10px]"
-                            style={{ color: "var(--text-tertiary)" }}
-                          >
-                            <Shield className="h-3 w-3 shrink-0" strokeWidth={1.8} />
-                            <span>{t("notice.protect_aes128")}</span>
-                          </div>
-                          <input
-                            type="password"
-                            value={ppPassword}
-                            onChange={(e) => setPpPassword(e.target.value)}
-                            placeholder="••••••••"
-                            className="forge-input w-full"
-                          />
-                          {ppPassword && (
-                            <div className="flex items-center gap-2">
-                              <div className="flex gap-1 flex-1">
-                                {[1, 2, 3].map((i) => (
-                                  <div
-                                    key={i}
-                                    className={cn(
-                                      "h-1 flex-1 rounded-full transition-all",
-                                      i <= ppPasswordStrength.level ? ppPasswordStrength.color : "",
-                                    )}
-                                  />
-                                ))}
-                              </div>
-                              <span
-                                className={cn(
-                                  "text-[10px] font-medium",
-                                  ppPasswordStrength.level <= 1
-                                    ? "text-red-400"
-                                    : ppPasswordStrength.level <= 2
-                                      ? "text-yellow-400"
-                                      : "text-green-400",
-                                )}
-                              >
-                                {t(ppPasswordStrength.label)}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Pipeline summary */}
-                {pipelineSummary.length > 1 && (
-                  <div className="flex items-center gap-1.5 text-[10px] text-neutral-500">
-                    <span>{t("pdf_tool.pipeline")}:</span>
-                    {pipelineSummary.map((step, i) => (
-                      <span key={i} className="flex items-center gap-1.5">
-                        {i > 0 && <span className="text-neutral-600">→</span>}
-                        <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>{step}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Pipeline progress indicator */}
-                {pipelineStep && (
-                  <div
-                    className="flex items-center gap-2"
-                    style={{ fontSize: "var(--text-sm)", color: "var(--text-secondary)" }}
-                  >
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.5} />
-                    <span>{t(PIPELINE_STEP_LABELS[pipelineStep])}</span>
-                  </div>
-                )}
-
-                {/* Execute button */}
-                <ActionButton
-                  onClick={handleExecute}
-                  disabled={isExecuteDisabled}
-                  loading={loading}
-                  loadingText={actionButtonText.loadingText}
-                  text={actionButtonText.text}
-                  icon={actionIcon}
+            {activeTool === "build" && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium uppercase tracking-widest text-neutral-500">
+                  {t("label.filename")}
+                </label>
+                <input
+                  type="text"
+                  value={outputName}
+                  onChange={(e) => setOutputName(e.target.value)}
+                  placeholder={t("label.placeholder_filename")}
+                  className="forge-input w-full"
                 />
               </div>
-            </>
-          )}
+            )}
 
-          {/* Result panel */}
-          <ResultPanel result={result} t={t} />
-        </>
-      )}
+            {activeTool === "split" && (
+              <div className="space-y-2">
+                <label className="text-xs font-medium uppercase tracking-widest text-neutral-500">
+                  {t("label.page_ranges")}
+                </label>
+                <input
+                  type="text"
+                  value={ranges}
+                  onChange={(e) => setRanges(e.target.value)}
+                  placeholder="1-3, 4-10, 11-end"
+                  className="forge-input w-full"
+                />
+                <p className="text-[10px] text-neutral-500">{t("label.page_ranges_hint")}</p>
+              </div>
+            )}
+
+            {activeTool === "export-images" && (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-2 block">
+                    {t("label.output_format_images")}
+                  </label>
+                  <div className="flex gap-2">
+                    {(["png", "jpg"] as ExportFormat[]).map((f) => (
+                      <button
+                        key={f}
+                        onClick={() => setExportFormat(f)}
+                        className={cn("btn-toggle uppercase", exportFormat === f && "btn-toggle-active")}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-2 block">
+                    {t("label.dpi")}
+                  </label>
+                  <div className="flex gap-2">
+                    {([72, 150, 300] as ExportDpi[]).map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => setExportDpi(d)}
+                        className={cn("btn-toggle", exportDpi === d && "btn-toggle-active")}
+                      >
+                        {t("label.dpi_value", { n: d })}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTool === "extract-images" && (
+              <p className="text-xs text-neutral-500">{t("pdf_tool.extract_images_hint")}</p>
+            )}
+
+            {activeTool === "watermark" && (
+              <div className="space-y-3">
+                {/* Text / Image toggle */}
+                <div className="flex gap-2">
+                  {(["text", "image"] as PdfWmMode[]).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => updateWm("mode", m)}
+                      className={cn("btn-toggle", wm.mode === m && "btn-toggle-active")}
+                    >
+                      {m === "text" ? (
+                        <Type className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      ) : (
+                        <ImageIcon className="h-3.5 w-3.5" strokeWidth={1.5} />
+                      )}
+                      {m === "text" ? t("label.watermark_text_mode") : t("label.watermark_image_mode")}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Text-specific */}
+                {wm.mode === "text" && (
+                  <>
+                    <div>
+                      <label className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-1 block">
+                        {t("label.watermark_text")}
+                      </label>
+                      <input
+                        type="text"
+                        value={wm.text}
+                        onChange={(e) => updateWm("text", e.target.value)}
+                        placeholder={t("label.placeholder_watermark")}
+                        className="forge-input w-full"
+                      />
+                    </div>
+                    <Slider
+                      label={t("label.font_size")}
+                      value={wm.fontSize}
+                      min={8}
+                      max={200}
+                      unit="px"
+                      onChange={(v) => updateWm("fontSize", v)}
+                    />
+                    <div>
+                      <label className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-1 block">
+                        {t("label.watermark_color")}
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <label className="relative cursor-pointer">
+                          <input
+                            type="color"
+                            value={wm.color}
+                            onChange={(e) => updateWm("color", e.target.value)}
+                            className="absolute inset-0 opacity-0 w-0 h-0 cursor-pointer"
+                          />
+                          <div
+                            className="h-8 w-8 cursor-pointer"
+                            style={{
+                              borderRadius: 6,
+                              border: "1px solid var(--bg-border)",
+                              transition: "border-color 150ms ease",
+                              backgroundColor: wm.color,
+                            }}
+                          />
+                        </label>
+                        <input
+                          type="text"
+                          value={wm.color}
+                          onChange={(e) => updateWm("color", e.target.value)}
+                          maxLength={7}
+                          className="forge-input"
+                          style={{ width: 96, flex: "none", fontFamily: "var(--font-mono)" }}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Image-specific */}
+                {wm.mode === "image" && (
+                  <>
+                    <div>
+                      <label className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-1 block">
+                        {t("label.watermark_logo")}
+                      </label>
+                      <button
+                        onClick={handleSelectWmLogo}
+                        className="flex items-center gap-2 w-full px-3 py-3 cursor-pointer"
+                        style={{
+                          borderRadius: 8,
+                          border: "1px dashed var(--bg-border)",
+                          background: "var(--bg-overlay)",
+                          fontSize: "var(--text-sm)",
+                          color: "var(--text-secondary)",
+                          transition: "all 150ms ease",
+                        }}
+                      >
+                        <Upload className="h-3.5 w-3.5" strokeWidth={1.5} />
+                        {wm.logoPath ? wm.logoPath.split(/[\\/]/).pop() : t("label.select_logo")}
+                      </button>
+                      {wm.logoPath && (
+                        <div
+                          className="mt-2 flex items-center gap-2 p-2"
+                          style={{
+                            borderRadius: 8,
+                            border: "1px solid var(--bg-border)",
+                            background: "var(--bg-overlay)",
+                          }}
+                        >
+                          <img
+                            src={safeAssetUrl(wm.logoPath)}
+                            alt="Logo"
+                            className="h-8 w-8 rounded object-contain"
+                            style={{ background: "var(--bg-elevated)" }}
+                          />
+                          <span className="text-[10px] text-neutral-500 truncate flex-1">
+                            {wm.logoPath.split(/[\\/]/).pop()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <Slider
+                      label={t("label.watermark_scale")}
+                      value={wm.scale}
+                      min={5}
+                      max={80}
+                      unit="%"
+                      onChange={(v) => updateWm("scale", v)}
+                    />
+                  </>
+                )}
+
+                {/* Position */}
+                <div>
+                  <label className="text-xs font-medium uppercase tracking-widest text-neutral-500 mb-1.5 block">
+                    {t("label.position")}
+                  </label>
+                  <div className="flex gap-2 flex-wrap">
+                    {PDF_WM_POSITIONS.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => updateWm("position", opt.value)}
+                        className={cn("btn-toggle", wm.position === opt.value && "btn-toggle-active")}
+                      >
+                        {t(opt.labelKey)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Opacity */}
+                <Slider
+                  label={t("label.opacity")}
+                  value={wm.opacity}
+                  min={5}
+                  max={100}
+                  onChange={(v) => updateWm("opacity", v)}
+                />
+              </div>
+            )}
+
+            {/* Post-processing toggles (only for PDF output actions) */}
+            {showPostProcessing && (
+              <div className="pt-3 space-y-3" style={{ borderTop: "1px solid var(--bg-border)" }}>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+                  {t("pdf_tool.post_processing")}
+                </p>
+
+                {/* Compress toggle */}
+                <div>
+                  <button
+                    onClick={() => setPpCompress(!ppCompress)}
+                    className={cn("btn-toggle w-full", ppCompress && "btn-toggle-active")}
+                  >
+                    <Zap className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    {t("pdf_tool.compress")}
+                    <div
+                      className="ml-auto h-4 w-7 rounded-full transition-all"
+                      style={{ background: ppCompress ? "var(--indigo-core)" : "var(--bg-border)" }}
+                    >
+                      <div
+                        className={cn("h-3 w-3 rounded-full mt-0.5 transition-all", ppCompress ? "ml-3.5" : "ml-0.5")}
+                        style={{ background: ppCompress ? "#fff" : "var(--text-tertiary)" }}
+                      />
+                    </div>
+                  </button>
+                  {ppCompress && (
+                    <div className="mt-2 pl-2">
+                      <Slider
+                        label={t("label.image_quality_pdf")}
+                        value={ppCompressQuality}
+                        min={10}
+                        max={95}
+                        leftHint={t("label.smaller_file")}
+                        rightHint={t("label.higher_quality")}
+                        onChange={setPpCompressQuality}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Protect toggle */}
+                <div>
+                  <button
+                    onClick={() => setPpProtect(!ppProtect)}
+                    className={cn("btn-toggle w-full", ppProtect && "btn-toggle-active")}
+                  >
+                    <Shield className="h-3.5 w-3.5" strokeWidth={1.5} />
+                    {t("pdf_tool.protect")}
+                    <div
+                      className="ml-auto h-4 w-7 rounded-full transition-all"
+                      style={{ background: ppProtect ? "var(--indigo-core)" : "var(--bg-border)" }}
+                    >
+                      <div
+                        className={cn("h-3 w-3 rounded-full mt-0.5 transition-all", ppProtect ? "ml-3.5" : "ml-0.5")}
+                        style={{ background: ppProtect ? "#fff" : "var(--text-tertiary)" }}
+                      />
+                    </div>
+                  </button>
+                  {ppProtect && (
+                    <div className="mt-2 pl-2 space-y-1.5">
+                      <div className="flex gap-1.5 items-center text-[10px]" style={{ color: "var(--text-tertiary)" }}>
+                        <Shield className="h-3 w-3 shrink-0" strokeWidth={1.8} />
+                        <span>{t("notice.protect_aes128")}</span>
+                      </div>
+                      <input
+                        type="password"
+                        value={ppPassword}
+                        onChange={(e) => setPpPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="forge-input w-full"
+                      />
+                      {ppPassword && (
+                        <div className="flex items-center gap-2">
+                          <div className="flex gap-1 flex-1">
+                            {[1, 2, 3].map((i) => (
+                              <div
+                                key={i}
+                                className={cn(
+                                  "h-1 flex-1 rounded-full transition-all",
+                                  i <= ppPasswordStrength.level ? ppPasswordStrength.color : "",
+                                )}
+                              />
+                            ))}
+                          </div>
+                          <span
+                            className={cn(
+                              "text-[10px] font-medium",
+                              ppPasswordStrength.level <= 1
+                                ? "text-red-400"
+                                : ppPasswordStrength.level <= 2
+                                  ? "text-yellow-400"
+                                  : "text-green-400",
+                            )}
+                          >
+                            {t(ppPasswordStrength.label)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Pipeline summary */}
+            {pipelineSummary.length > 1 && (
+              <div className="flex items-center gap-1.5 text-[10px] text-neutral-500">
+                <span>{t("pdf_tool.pipeline")}:</span>
+                {pipelineSummary.map((step, i) => (
+                  <span key={i} className="flex items-center gap-1.5">
+                    {i > 0 && <span className="text-neutral-600">→</span>}
+                    <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>{step}</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="space-y-1.5">
+              <label className="forge-label">{t("label.pdf_password")}</label>
+              <input
+                type="password"
+                value={unlockPassword}
+                onChange={(e) => setUnlockPassword(e.target.value)}
+                placeholder="••••••••"
+                className="forge-input w-full"
+              />
+            </div>
+          </>
+        )}
+      </ControlsPanel>
     </div>
   );
 }
@@ -996,12 +927,14 @@ function ResultPanel({ result, t }: ResultPanelProps) {
           )}
           <span style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}>{mainText}</span>
         </div>
-        {result.outputDir && (
-          <button onClick={() => revealItemInDir(result.outputDir)} className="btn-ghost">
-            <FolderOpen className="h-3 w-3" strokeWidth={1.5} />
-            {t("label.open_output_folder")}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {result.outputDir && (
+            <button onClick={() => revealItemInDir(result.outputDir)} className="btn-ghost">
+              <FolderOpen className="h-3 w-3" strokeWidth={1.5} />
+              {t("label.open_output_folder")}
+            </button>
+          )}
+        </div>
       </div>
 
       {extraContent}

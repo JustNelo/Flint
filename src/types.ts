@@ -17,6 +17,12 @@ export interface BatchProgress {
   results: ProcessingResult[];
 }
 
+export interface ImageThumbnail {
+  path: string;
+  /** Base64 JPEG payload, or null when the source could not be rasterized (e.g. SVG). */
+  thumbnail_b64: string | null;
+}
+
 export interface PdfExtractionResult {
   pdf_path: string;
   output_dir: string;
@@ -24,7 +30,7 @@ export interface PdfExtractionResult {
   errors: string[];
 }
 
-export type OutputFormat = "png" | "jpg" | "webp" | "bmp" | "ico" | "tiff";
+export type OutputFormat = "png" | "jpg" | "webp" | "bmp" | "ico" | "tiff" | "avif";
 
 export type ResizeMode = "exact" | "width" | "height" | "percentage";
 

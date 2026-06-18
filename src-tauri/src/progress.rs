@@ -19,19 +19,7 @@ pub fn emit_progress(
     current_file: &str,
 ) {
     let done = processed.fetch_add(1, Ordering::Relaxed) + 1;
-    let filename = std::path::Path::new(current_file)
-        .file_name()
-        .and_then(|f| f.to_str())
-        .unwrap_or(current_file)
-        .to_string();
-    let _ = app_handle.emit(
-        "processing-progress",
-        ProgressPayload {
-            completed: done,
-            total,
-            current_file: filename,
-        },
-    );
+    emit_progress_simple(app_handle, done, total, current_file);
 }
 
 /// Convenience wrapper for sequential loops where no `AtomicUsize` is needed.

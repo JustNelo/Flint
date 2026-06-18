@@ -7,6 +7,7 @@ export type UpdateStatus = "idle" | "available" | "downloading" | "error";
 interface AutoUpdateState {
   status: UpdateStatus;
   version: string;
+  checkNow: () => Promise<{ available: boolean; version: string }>;
   install: () => Promise<void>;
   dismiss: () => void;
 }
@@ -40,6 +41,17 @@ export function useAutoUpdate(): AutoUpdateState {
     };
   }, []);
 
+  const checkNow = useCallback(async (): Promise<{ available: boolean; version: string }> => {
+    const update = await check();
+    if (update) {
+      setVersion(update.version);
+      setPendingUpdate(update);
+      setStatus("available");
+      return { available: true, version: update.version };
+    }
+    return { available: false, version: "" };
+  }, []);
+
   const install = useCallback(async () => {
     if (!pendingUpdate) return;
     setStatus("downloading");
@@ -56,5 +68,5 @@ export function useAutoUpdate(): AutoUpdateState {
     setPendingUpdate(null);
   }, []);
 
-  return { status, version, install, dismiss };
+  return { status, version, checkNow, install, dismiss };
 }

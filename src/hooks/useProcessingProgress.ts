@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 
 interface ProgressPayload {
@@ -20,9 +20,5 @@ export function useProcessingProgress() {
     };
   }, []);
 
-  const resetProgress = useCallback(() => {
-    setProgress(null);
-  }, []);
-
-  return { progress, resetProgress };
+  return { progress };
 }

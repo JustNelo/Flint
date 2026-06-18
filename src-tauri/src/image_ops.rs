@@ -1,13 +1,14 @@
 use ab_glyph::{FontArc, PxScale};
+use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, ImageFormat, ImageReader, Rgba};
 use imageproc::drawing::draw_text_mut;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock};
-use webp::Encoder;
 
 use crate::progress::emit_progress;
 use crate::utils::{ensure_output_dir, file_size, file_stem, get_extension};
@@ -69,6 +70,52 @@ fn load_image(path: &str) -> Result<DynamicImage, String> {
         .map_err(|e| format!("Cannot decode image '{}': {}", path, e))
 }
 
+/// Max edge (px) for grid thumbnails. ~2x the ~100px display cell so they stay
+/// crisp on hi-dpi screens while the decoded bitmap stays tiny
+/// (256*256*4 ≈ 256 KB) regardless of the source image's native resolution.
+const THUMBNAIL_MAX_EDGE: u32 = 256;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ImageThumbnail {
+    pub path: String,
+    /// Base64-encoded JPEG, or `None` when the file cannot be decoded as a
+    /// raster image (e.g. SVG / unsupported) — the frontend then falls back to
+    /// the original via the asset protocol.
+    pub thumbnail_b64: Option<String>,
+}
+
+fn encode_thumbnail(path: &str) -> Result<String, String> {
+    use base64::Engine;
+    let img = load_image(path)?;
+    // `thumbnail` preserves aspect ratio within the box using a fast filter.
+    // Drop alpha (JPEG has none) by re-wrapping as RGB8 before encoding.
+    let thumb = DynamicImage::ImageRgb8(
+        img.thumbnail(THUMBNAIL_MAX_EDGE, THUMBNAIL_MAX_EDGE)
+            .to_rgb8(),
+    );
+
+    let mut jpeg_buf: Vec<u8> = Vec::new();
+    let encoder = JpegEncoder::new_with_quality(Cursor::new(&mut jpeg_buf), 70);
+    thumb
+        .write_with_encoder(encoder)
+        .map_err(|e| format!("JPEG encode failed for '{}': {}", path, e))?;
+
+    Ok(base64::engine::general_purpose::STANDARD.encode(&jpeg_buf))
+}
+
+/// Generate small base64 JPEG thumbnails for a batch of images, in parallel.
+/// Each source path maps to its thumbnail (or `None` on failure) so the grid
+/// can decode a bounded-size bitmap instead of the full-resolution original.
+pub fn generate_thumbnails(input_paths: &[String]) -> Vec<ImageThumbnail> {
+    input_paths
+        .par_iter()
+        .map(|path| ImageThumbnail {
+            path: path.clone(),
+            thumbnail_b64: encode_thumbnail(path).ok(),
+        })
+        .collect()
+}
+
 pub fn compress_to_webp(
     input_paths: Vec<String>,
     quality: f32,
@@ -83,16 +130,10 @@ pub fn compress_to_webp(
         &cancel,
         |input_path, out_dir| {
             let img = load_image(input_path)?;
-            let rgba = img.to_rgba8();
-            let (w, h) = rgba.dimensions();
-
-            let encoder = Encoder::from_rgba(&rgba, w, h);
-            let webp_data = encoder.encode(quality);
 
             let stem = file_stem(input_path);
             let output_path = out_dir.join(format!("{}-compressed.webp", stem));
-            fs::write(&output_path, &*webp_data)
-                .map_err(|e| format!("Cannot write WebP file: {}", e))?;
+            write_webp(&img, &output_path, quality)?;
 
             Ok((output_path.to_string_lossy().to_string(), None))
         },
@@ -132,6 +173,60 @@ pub fn compress_to_jpeg(
     )
 }
 
+/// AVIF encode speed (1 = slowest/smallest … 10 = fastest/largest). 8 keeps the
+/// CPU cost manageable; rav1e at lower speeds is brutally heavy on batches.
+const AVIF_SPEED: u8 = 8;
+
+pub fn compress_to_avif(
+    input_paths: Vec<String>,
+    quality: u8,
+    output_dir: String,
+    app_handle: tauri::AppHandle,
+    cancel: Arc<AtomicBool>,
+) -> BatchProgress {
+    let quality = quality.clamp(1, 100);
+
+    let run = || {
+        batch_process(
+            &input_paths,
+            &output_dir,
+            &app_handle,
+            &cancel,
+            |input_path, out_dir| {
+                let img = load_image(input_path)?;
+                let rgba = img.to_rgba8(); // AVIF supports alpha
+
+                let stem = file_stem(input_path);
+                let output_path = out_dir.join(format!("{}-compressed.avif", stem));
+
+                let mut buf: Vec<u8> = Vec::new();
+                rgba.write_with_encoder(image::codecs::avif::AvifEncoder::new_with_speed_quality(
+                    &mut buf, AVIF_SPEED, quality,
+                ))
+                .map_err(|e| format!("Cannot encode AVIF: {}", e))?;
+                fs::write(&output_path, &buf)
+                    .map_err(|e| format!("Cannot write AVIF file: {}", e))?;
+
+                Ok((output_path.to_string_lossy().to_string(), None))
+            },
+        )
+    };
+
+    // rav1e is far heavier than the other encoders, so AVIF runs on its own
+    // small pool (~quarter of cores) — it cannot peg the CPU to thermal limits,
+    // and a cancel drains quickly since few encodes are ever in flight.
+    let cores = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(4);
+    match rayon::ThreadPoolBuilder::new()
+        .num_threads((cores / 4).max(1))
+        .build()
+    {
+        Ok(pool) => pool.install(run),
+        Err(_) => run(),
+    }
+}
+
 pub fn convert_images(
     input_paths: Vec<String>,
     output_format: String,
@@ -152,13 +247,22 @@ pub fn convert_images(
 
             let output_path_str = match target_format.as_str() {
                 "webp" => {
-                    let rgba = img.to_rgba8();
-                    let (w, h) = rgba.dimensions();
-                    let encoder = Encoder::from_rgba(&rgba, w, h);
-                    let webp_data = encoder.encode(100.0);
                     let output_path = out_dir.join(format!("{}-converted.webp", stem));
-                    fs::write(&output_path, &*webp_data)
-                        .map_err(|e| format!("Cannot write WebP: {}", e))?;
+                    write_webp(&img, &output_path, 100.0)?;
+                    output_path.to_string_lossy().to_string()
+                }
+                "avif" => {
+                    let output_path = out_dir.join(format!("{}-converted.avif", stem));
+                    let rgba = img.to_rgba8();
+                    let mut buf: Vec<u8> = Vec::new();
+                    rgba.write_with_encoder(
+                        image::codecs::avif::AvifEncoder::new_with_speed_quality(
+                            &mut buf, AVIF_SPEED, 80,
+                        ),
+                    )
+                    .map_err(|e| format!("Cannot encode AVIF: {}", e))?;
+                    fs::write(&output_path, &buf)
+                        .map_err(|e| format!("Cannot write AVIF: {}", e))?;
                     output_path.to_string_lossy().to_string()
                 }
                 "png" => {
@@ -203,6 +307,20 @@ pub fn convert_images(
 
 // --- Shared helpers for new features ---
 
+/// Encode `img` as WebP at the given quality (clamped to `[0, 100]`) and write
+/// it to `path`. Centralizes the RGBA conversion + encode used by every WebP
+/// output site so quality handling stays consistent.
+fn write_webp(
+    img: &image::DynamicImage,
+    path: &std::path::Path,
+    quality: f32,
+) -> Result<(), String> {
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let data = webp::Encoder::from_rgba(&rgba, w, h).encode(quality.clamp(0.0, 100.0));
+    std::fs::write(path, &*data).map_err(|e| format!("Cannot write WebP: {}", e))
+}
+
 fn save_in_original_format(
     img: &DynamicImage,
     input_path: &str,
@@ -210,13 +328,7 @@ fn save_in_original_format(
 ) -> Result<(), String> {
     let ext = get_extension(input_path);
     match ext.as_str() {
-        "webp" => {
-            let rgba = img.to_rgba8();
-            let (w, h) = rgba.dimensions();
-            let encoder = Encoder::from_rgba(&rgba, w, h);
-            let webp_data = encoder.encode(90.0);
-            fs::write(output_path, &*webp_data).map_err(|e| format!("Cannot write WebP: {}", e))
-        }
+        "webp" => write_webp(img, output_path, 90.0),
         "jpg" | "jpeg" => img
             .save_with_format(output_path, ImageFormat::Jpeg)
             .map_err(|e| format!("Cannot save JPEG: {}", e)),
@@ -489,7 +601,7 @@ pub fn add_watermark(
             let (img_w, img_h) = (img.width(), img.height());
             let mut base = img.to_rgba8();
 
-            let text_width = (font_size * text.len() as f32 * 0.55) as i32;
+            let text_width = (font_size * text.chars().count() as f32 * 0.55) as i32;
             let text_height = font_size as i32;
             let margin = WATERMARK_MARGIN_PX;
 
@@ -711,10 +823,16 @@ pub fn optimize_lossless(
                     output_path.to_string_lossy().to_string()
                 }
                 "jpg" | "jpeg" => {
-                    // Re-encode JPEG with optimized Huffman tables at quality 100
+                    // JPEG is inherently lossy; re-encode at max quality (100) to minimize
+                    // additional generation loss while still rewriting clean Huffman tables.
                     let img = load_image(input_path)?;
                     let output_path = out_dir.join(format!("{}-optimized.jpg", stem));
-                    img.save_with_format(&output_path, ImageFormat::Jpeg)
+                    let mut out = std::fs::File::create(&output_path)
+                        .map_err(|e| format!("Cannot create optimized JPEG: {}", e))?;
+                    let mut encoder =
+                        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 100);
+                    encoder
+                        .encode_image(&img)
                         .map_err(|e| format!("Cannot save optimized JPEG: {}", e))?;
                     output_path.to_string_lossy().to_string()
                 }
@@ -860,5 +978,37 @@ mod tests {
         assert!(!r.success);
         assert_eq!(r.error.as_deref(), Some("decode error"));
         assert_eq!(r.output_path, String::new());
+    }
+
+    #[test]
+    fn generate_thumbnails_downscales_and_marks_failures() {
+        // Write a large temp PNG so the source bitmap dwarfs the thumbnail.
+        let path = std::env::temp_dir().join("rustine_thumb_test.png");
+        let path_str = path.to_string_lossy().to_string();
+        DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            1024,
+            1024,
+            Rgba([200, 30, 30, 255]),
+        ))
+        .save(&path)
+        .unwrap();
+
+        let missing = "/nonexistent/definitely_not_here.png".to_string();
+        let res = generate_thumbnails(&[path_str.clone(), missing.clone()]);
+        assert_eq!(res.len(), 2);
+
+        let ok = res.iter().find(|t| t.path == path_str).unwrap();
+        let b64 = ok.thumbnail_b64.as_ref().expect("thumbnail should encode");
+        // A 256px JPEG is far smaller than the 1024x1024 RGBA source.
+        assert!(
+            b64.len() < 50_000,
+            "thumbnail unexpectedly large: {}",
+            b64.len()
+        );
+
+        let bad = res.iter().find(|t| t.path == missing).unwrap();
+        assert!(bad.thumbnail_b64.is_none());
+
+        let _ = std::fs::remove_file(&path);
     }
 }

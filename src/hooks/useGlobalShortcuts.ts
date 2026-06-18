@@ -1,35 +1,14 @@
 import { useEffect } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 
 interface UseGlobalShortcutsOptions {
   acceptExtensions: string[];
-  onFilesSelected: (paths: string[]) => void;
 }
 
-export function useGlobalShortcuts({ acceptExtensions, onFilesSelected }: UseGlobalShortcutsOptions) {
+export function useGlobalShortcuts(_options: UseGlobalShortcutsOptions) {
   useEffect(() => {
-    const handleKeyDown = async (e: KeyboardEvent) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       if (!mod) return;
-
-      // Ctrl+O — open file dialog
-      if (e.key === "o") {
-        e.preventDefault();
-        try {
-          const selected = await open({
-            multiple: true,
-            filters: [{ name: "Files", extensions: acceptExtensions }],
-          });
-          if (!selected) return;
-          const paths = Array.isArray(selected) ? selected : [selected];
-          if (paths.length > 0) {
-            onFilesSelected(paths);
-          }
-        } catch (err) {
-          console.error("Shortcut file open error:", err);
-        }
-        return;
-      }
 
       // Ctrl+Enter — click the active action button
       if (e.key === "Enter") {
@@ -58,5 +37,5 @@ export function useGlobalShortcuts({ acceptExtensions, onFilesSelected }: UseGlo
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [acceptExtensions, onFilesSelected]);
+  }, []);
 }

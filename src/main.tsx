@@ -1,21 +1,28 @@
-import React from "react";
+import React, { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { I18nProvider } from "./i18n/i18n";
 import { WorkspaceProvider } from "./hooks/useWorkspace";
-import { HistoryProvider } from "./hooks/HistoryProvider";
-import { ThemeProvider } from "./hooks/useTheme";
+import { ChainHandoffProvider } from "./hooks/useChainHandoff";
 import App from "./App";
+
+function RootApp() {
+  useEffect(() => {
+    document.documentElement.dataset.theme = "dark";
+  }, []);
+
+  return (
+    <I18nProvider>
+      <WorkspaceProvider>
+        <ChainHandoffProvider>
+          <App />
+        </ChainHandoffProvider>
+      </WorkspaceProvider>
+    </I18nProvider>
+  );
+}
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <I18nProvider>
-      <ThemeProvider>
-        <WorkspaceProvider>
-          <HistoryProvider>
-            <App />
-          </HistoryProvider>
-        </WorkspaceProvider>
-      </ThemeProvider>
-    </I18nProvider>
+    <RootApp />
   </React.StrictMode>,
 );

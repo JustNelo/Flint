@@ -31,20 +31,31 @@ use rename_ops::RenameResult;
 use sprite_ops::SpriteSheetResult;
 use std::path::{Component, Path};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use svg_ops::SvgRasterizeResult;
 use tauri::Manager;
 
 /// Thread-safe wrapper around `Pdfium`.
-/// SAFETY: The `thread_safe` feature of pdfium-render ensures all internal
-/// operations are synchronized via mutexes, making concurrent access safe.
-struct SendPdfium(Pdfium);
+///
+/// SAFETY: Pdfium is NOT safe for concurrent use. The `thread_safe` feature of
+/// pdfium-render only takes its global lock once at `FPDF_InitLibrary` and holds
+/// it until `FPDF_DestroyLibrary` — it does **not** serialize individual calls on
+/// a shared instance. We therefore wrap the instance in our own `Mutex` and route
+/// every pdfium operation through `lock()`, guaranteeing that only one thread ever
+/// calls into pdfium at a time. With that guarantee, sharing the instance across
+/// threads (`Send` + `Sync`) is sound.
+struct SendPdfium(Mutex<Pdfium>);
 unsafe impl Send for SendPdfium {}
 unsafe impl Sync for SendPdfium {}
 
 impl SendPdfium {
-    fn inner(&self) -> &Pdfium {
-        &self.0
+    /// Acquire exclusive access to the shared Pdfium instance for the duration of
+    /// a single operation. Recovers from a poisoned lock (left by a previously
+    /// panicking operation) so PDF features keep working.
+    fn lock(&self) -> MutexGuard<'_, Pdfium> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 }
 
@@ -230,6 +241,23 @@ async fn compress_jpeg(
 }
 
 #[tauri::command]
+async fn compress_avif(
+    app_handle: tauri::AppHandle,
+    token: tauri::State<'_, CancellationToken>,
+    input_paths: Vec<String>,
+    quality: u8,
+    output_dir: String,
+) -> Result<BatchProgress, String> {
+    validate_path(&output_dir)?;
+    validate_paths(&input_paths)?;
+    let cancel = arm_cancel_token(&token);
+    run_blocking(move || {
+        image_ops::compress_to_avif(input_paths, quality, output_dir, app_handle, cancel)
+    })
+    .await
+}
+
+#[tauri::command]
 async fn convert_images(
     app_handle: tauri::AppHandle,
     token: tauri::State<'_, CancellationToken>,
@@ -247,6 +275,14 @@ async fn convert_images(
 }
 
 #[tauri::command]
+async fn generate_image_thumbnails(
+    input_paths: Vec<String>,
+) -> Result<Vec<image_ops::ImageThumbnail>, String> {
+    validate_paths(&input_paths)?;
+    run_blocking(move || image_ops::generate_thumbnails(&input_paths)).await
+}
+
+#[tauri::command]
 async fn extract_pdf_images(
     app_handle: tauri::AppHandle,
     pdfium_state: tauri::State<'_, PdfiumState>,
@@ -259,10 +295,11 @@ async fn extract_pdf_images(
     let output_stem = output_stem.map(|s| utils::sanitize_stem(&s)).transpose()?;
     let pdfium = require_pdfium(&pdfium_state)?;
     run_blocking(move || {
+        let guard = pdfium.lock();
         pdf_ops::extract_images_from_pdf(
             &pdf_path,
             &output_dir,
-            pdfium.inner(),
+            &guard,
             output_stem.as_deref(),
             &app_handle,
         )
@@ -406,7 +443,11 @@ async fn get_pdf_page_count(
 ) -> Result<usize, String> {
     validate_path(&pdf_path)?;
     let pdfium = require_pdfium(&pdfium_state)?;
-    run_blocking(move || pdf_builder_ops::get_pdf_page_count(&pdf_path, pdfium.inner())).await?
+    run_blocking(move || {
+        let guard = pdfium.lock();
+        pdf_builder_ops::get_pdf_page_count(&pdf_path, &guard)
+    })
+    .await?
 }
 
 #[tauri::command]
@@ -419,12 +460,8 @@ async fn generate_pdf_thumbnails(
     validate_paths(&file_paths)?;
     let pdfium = require_pdfium(&pdfium_state)?;
     run_blocking(move || {
-        pdf_builder_ops::generate_thumbnails_batch(
-            file_paths,
-            pdfium.inner(),
-            start_page,
-            max_pages,
-        )
+        let guard = pdfium.lock();
+        pdf_builder_ops::generate_thumbnails_batch(file_paths, &guard, start_page, max_pages)
     })
     .await
 }
@@ -432,13 +469,15 @@ async fn generate_pdf_thumbnails(
 #[tauri::command]
 async fn merge_to_pdf(
     app_handle: tauri::AppHandle,
+    token: tauri::State<'_, CancellationToken>,
     items: Vec<PdfBuilderItem>,
     options: MergePdfOptions,
 ) -> Result<MergePdfResult, String> {
     validate_path(&options.output_path)?;
     let item_paths: Vec<String> = items.iter().map(|i| i.source_path.clone()).collect();
     validate_paths(&item_paths)?;
-    run_blocking(move || pdf_builder_ops::merge_to_pdf(items, options, &app_handle)).await
+    let cancel = arm_cancel_token(&token);
+    run_blocking(move || pdf_builder_ops::merge_to_pdf(items, options, &app_handle, cancel)).await
 }
 
 #[tauri::command]
@@ -507,10 +546,11 @@ async fn pdf_to_images(
     let dpi = dpi.clamp(72, 1200);
     let pdfium = require_pdfium(&pdfium_state)?;
     run_blocking(move || {
+        let guard = pdfium.lock();
         pdf_ops::pdf_to_images(
             &pdf_path,
             &output_dir,
-            pdfium.inner(),
+            &guard,
             &format,
             dpi,
             output_stem.as_deref(),
@@ -630,8 +670,11 @@ async fn unlock_pdf_cmd(
     validate_path(&pdf_path)?;
     validate_path(&output_dir)?;
     let pdfium = require_pdfium(&pdfium_state)?;
-    run_blocking(move || pdf_ops::unlock_pdf(pdfium.inner(), &pdf_path, &password, &output_dir))
-        .await
+    run_blocking(move || {
+        let guard = pdfium.lock();
+        pdf_ops::unlock_pdf(&guard, &pdf_path, &password, &output_dir)
+    })
+    .await
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -720,6 +763,11 @@ async fn generate_qr_cmd(text: String, size: u32, output_dir: String) -> Result<
 }
 
 #[tauri::command]
+async fn generate_qr_preview(text: String, size: u32) -> Result<String, String> {
+    run_blocking(move || qr_ops::generate_qr_base64(&text, size)).await?
+}
+
+#[tauri::command]
 async fn rasterize_svg_cmd(
     input_path: String,
     target_width: u32,
@@ -738,11 +786,6 @@ async fn rasterize_svg_cmd(
 #[tauri::command]
 fn cancel_processing(token: tauri::State<'_, CancellationToken>) {
     (*token).0.store(true, Ordering::Relaxed);
-}
-
-#[tauri::command]
-fn reset_cancel(token: tauri::State<'_, CancellationToken>) {
-    (*token).0.store(false, Ordering::Relaxed);
 }
 
 /// Upper bound on file size accepted by `image_to_base64`.
@@ -798,7 +841,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             compress_webp,
             compress_jpeg,
+            compress_avif,
             convert_images,
+            generate_image_thumbnails,
             extract_pdf_images,
             resize_images,
             strip_metadata,
@@ -824,12 +869,23 @@ pub fn run() {
             watermark_pdf_image_cmd,
             image_to_base64,
             generate_qr_cmd,
+            generate_qr_preview,
             bulk_rename_cmd,
             rasterize_svg_cmd,
-            cancel_processing,
-            reset_cancel
+            cancel_processing
         ])
         .setup(|app| {
+            // Cap CPU parallelism at ~75% of logical cores. Batch image work
+            // (rayon) stays fast but leaves headroom, so smaller machines don't
+            // overheat or freeze, and cancellation drains faster (fewer encodes
+            // in flight). Best-effort — ignore if the global pool already exists.
+            let cores = std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(4);
+            let _ = rayon::ThreadPoolBuilder::new()
+                .num_threads((cores * 3 / 4).max(1))
+                .build_global();
+
             let png_bytes = include_bytes!("../icons/icon.png");
             if let Ok(img) = image::load_from_memory(png_bytes) {
                 let rgba = img.to_rgba8();
@@ -845,7 +901,7 @@ pub fn run() {
                 Ok(path) => match Pdfium::bind_to_library(&path) {
                     Ok(bindings) => {
                         eprintln!("Pdfium library bound successfully from: {}", path);
-                        Some(Arc::new(SendPdfium(Pdfium::new(bindings))))
+                        Some(Arc::new(SendPdfium(Mutex::new(Pdfium::new(bindings)))))
                     }
                     Err(e) => {
                         eprintln!(
@@ -867,7 +923,7 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .unwrap_or_else(|e| {
-            eprintln!("Fatal: failed to start Rust-ine — {}", e);
+            eprintln!("Fatal: failed to start Flint — {}", e);
             std::process::exit(1);
         });
 }

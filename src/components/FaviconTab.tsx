@@ -1,12 +1,15 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Loader2, Globe, CheckCircle, XCircle } from "lucide-react";
+import { Globe } from "lucide-react";
 import { toast } from "sonner";
 import { DropZone } from "./DropZone";
 import { ImageGrid } from "./ImageGrid";
+import { ResultCard } from "./ResultCard";
+import { ActionButton } from "./ui/ActionButton";
+import { MaterialPanel, type MaterialMode } from "./MaterialPanel";
+import { ControlsPanel } from "./ControlsPanel";
 import { useFileSelection } from "../hooks/useFileSelection";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { useHistory } from "../hooks/useHistory";
 import { useT } from "../i18n/i18n";
 
 interface FaviconResult {
@@ -19,9 +22,13 @@ export function FaviconTab() {
   const { t } = useT();
   const { files, addFiles, removeFile, clearFiles, reorderFiles } = useFileSelection();
   const { getOutputDir } = useWorkspace();
-  const { addEntry } = useHistory();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<FaviconResult | null>(null);
+  const [panelMode, setPanelMode] = useState<MaterialMode>("material");
+
+  useEffect(() => {
+    if (!loading) setPanelMode(result !== null ? "results" : "material");
+  }, [result, loading]);
 
   const handleFilesSelected = useCallback(
     (paths: string[]) => {
@@ -58,14 +65,6 @@ export function FaviconTab() {
 
       setResult(res);
 
-      addEntry({
-        tabId: "favicon",
-        filesCount: 1,
-        successCount: res.generated_files.length > 0 ? 1 : 0,
-        failCount: res.errors.length,
-        outputDir,
-      });
-
       if (res.generated_files.length > 0 && res.errors.length === 0) {
         toast.success(t("toast.favicon_success"));
       } else if (res.generated_files.length > 0) {
@@ -83,65 +82,60 @@ export function FaviconTab() {
     } finally {
       setLoading(false);
     }
-  }, [files, getOutputDir, addEntry, t]);
+  }, [files, getOutputDir, t]);
+
+  const isEmpty = files.length === 0;
 
   return (
-    <div className="space-y-5">
-      <DropZone
-        accept="png,jpg,jpeg,bmp,tiff,tif,webp"
-        label={t("dropzone.images_favicon")}
-        sublabel={t("dropzone.sublabel_favicon")}
-        onFilesSelected={handleFilesSelected}
+    <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+      <MaterialPanel
+        mode={panelMode}
+        onModeChange={setPanelMode}
+        hasResults={result !== null}
+        material={
+          <div className="space-y-3">
+            <DropZone
+              accept="png,jpg,jpeg,bmp,tiff,tif,webp"
+              label={isEmpty ? t("dropzone.images_favicon") : t("dropzone.add_more")}
+              sublabel={t("dropzone.sublabel_favicon")}
+              compact={!isEmpty}
+              onFilesSelected={handleFilesSelected}
+            />
+            <ImageGrid files={files} onReorder={reorderFiles} onRemove={removeFile} onClear={handleClearFiles} />
+          </div>
+        }
+        results={
+          result && (
+            <ResultCard
+              success={result.errors.length === 0}
+              title={t("result.favicons_generated")}
+              chips={result.generated_files.map((file) => (
+                <span key={file} className="forge-chip">
+                  {file}
+                </span>
+              ))}
+              errors={result.errors}
+              revealPath={result.zip_path}
+            />
+          )
+        }
       />
 
-      <ImageGrid files={files} onReorder={reorderFiles} onRemove={removeFile} onClear={handleClearFiles} />
-
-      <button onClick={handleGenerate} disabled={loading || files.length === 0} className="btn-primary w-full">
-        {loading ? (
-          <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.5} />
-        ) : (
-          <Globe className="h-4 w-4" strokeWidth={1.5} />
-        )}
-        {loading ? t("status.generating_favicons") : t("action.generate_favicons")}
-      </button>
-
-      {result && (
-        <div className="mt-4 forge-card space-y-3">
-          <div className="flex items-center gap-2">
-            {result.errors.length === 0 ? (
-              <CheckCircle className="h-4 w-4" style={{ color: "var(--success)" }} strokeWidth={1.5} />
-            ) : (
-              <XCircle className="h-4 w-4" style={{ color: "var(--warning)" }} strokeWidth={1.5} />
-            )}
-            <span style={{ fontSize: "var(--text-sm)", fontWeight: 500, color: "var(--text-primary)" }}>
-              {t("result.favicons_generated")}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap gap-1.5">
-            {result.generated_files.map((file) => (
-              <span key={file} className="forge-chip">
-                {file}
-              </span>
-            ))}
-          </div>
-
-          {result.errors.length > 0 && (
-            <div className="max-h-24 overflow-y-auto space-y-1">
-              {result.errors.map((err, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-2"
-                  style={{ fontSize: "var(--text-sm)", color: "rgba(239,68,68,0.8)" }}
-                >
-                  <XCircle className="h-3 w-3 shrink-0 mt-0.5" strokeWidth={1.5} />
-                  <span>{err}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+      <ControlsPanel
+        disabled={isEmpty}
+        action={
+          <ActionButton
+            onClick={handleGenerate}
+            disabled={isEmpty}
+            loading={loading}
+            loadingText={t("status.generating_favicons")}
+            text={t("action.generate_favicons")}
+            icon={<Globe className="h-4 w-4" strokeWidth={1.5} />}
+          />
+        }
+      >
+        <></>
+      </ControlsPanel>
     </div>
   );
 }

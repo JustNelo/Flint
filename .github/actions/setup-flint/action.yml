@@ -1,0 +1,84 @@
+name: "Setup Flint build environment"
+description: "Fetch pinned pdfium binaries (cached), set up Rust + Bun, install frontend deps."
+
+inputs:
+  rust-components:
+    description: "Comma-separated rustup components to install (e.g. 'clippy, rustfmt'). Empty for none."
+    required: false
+    default: ""
+  pdfium-version:
+    description: "Pinned bblanchon/pdfium-binaries release tag. Bump deliberately, not automatically."
+    required: false
+    default: "chromium/7891"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Linux system dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+    # Both binaries are fetched on every runner because tauri.conf.json lists
+    # them in bundle.resources unconditionally — the build-script verifies both
+    # are present even for clippy/tests. Pinned + cached for reproducible runs;
+    # bumping the version (and only then) invalidates the cache.
+    - name: Cache pdfium binaries
+      id: pdfium-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          src-tauri/resources/pdfium.dll
+          src-tauri/resources/libpdfium.so
+        key: pdfium-${{ inputs.pdfium-version }}-${{ runner.os }}
+
+    - name: Fetch pdfium binaries
+      if: steps.pdfium-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        PDFIUM_TAG: ${{ inputs.pdfium-version }}
+      run: |
+        set -euo pipefail
+        # bsdtar (Windows) and GNU tar both read a colon in an argument as
+        # `host:path`, so work from the repo root with relative paths only.
+        mkdir -p src-tauri/resources tmp-pdfium/win tmp-pdfium/linux
+        base="https://github.com/bblanchon/pdfium-binaries/releases/download/${PDFIUM_TAG}"
+
+        echo "Fetching pdfium.dll (${PDFIUM_TAG})..."
+        curl -fsSL -o tmp-pdfium/win.tgz "${base}/pdfium-win-x64.tgz"
+        tar -xzf tmp-pdfium/win.tgz -C tmp-pdfium/win
+        cp tmp-pdfium/win/bin/pdfium.dll src-tauri/resources/pdfium.dll
+
+        echo "Fetching libpdfium.so (${PDFIUM_TAG})..."
+        curl -fsSL -o tmp-pdfium/linux.tgz "${base}/pdfium-linux-x64.tgz"
+        tar -xzf tmp-pdfium/linux.tgz -C tmp-pdfium/linux
+        cp tmp-pdfium/linux/lib/libpdfium.so src-tauri/resources/libpdfium.so
+
+        rm -rf tmp-pdfium
+
+    - name: Verify pdfium binaries present
+      shell: bash
+      run: |
+        set -euo pipefail
+        test -f src-tauri/resources/pdfium.dll
+        test -f src-tauri/resources/libpdfium.so
+        ls -la src-tauri/resources/
+
+    - name: Setup Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: ${{ inputs.rust-components }}
+
+    - name: Rust cache
+      uses: swatinem/rust-cache@v2
+      with:
+        workspaces: "./src-tauri -> target"
+
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+
+    - name: Install frontend dependencies
+      shell: bash
+      run: bun install --frozen-lockfile

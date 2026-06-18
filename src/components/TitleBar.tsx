@@ -1,14 +1,13 @@
 import { useCallback, useMemo } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, Square, X, Clock, Settings } from "lucide-react";
-import icon from "../assets/icon.png";
+import { Minus, Square, X, Settings } from "lucide-react";
+import { FlintLogo } from "./FlintLogo";
 
 interface TitleBarProps {
-  onShowHistory?: () => void;
   onShowSettings?: () => void;
 }
 
-export function TitleBar({ onShowHistory, onShowSettings }: TitleBarProps) {
+export function TitleBar({ onShowSettings }: TitleBarProps) {
   const appWindow = useMemo(() => getCurrentWindow(), []);
 
   const handleMinimize = useCallback(async () => {
@@ -43,46 +42,12 @@ export function TitleBar({ onShowHistory, onShowSettings }: TitleBarProps) {
       className="relative z-20 flex shrink-0 items-center justify-between select-none"
       style={{ height: 36, background: "var(--bg-surface)", borderBottom: "1px solid var(--bg-border)" }}
     >
-      <div className="flex items-center gap-2 px-3 pointer-events-none">
-        <img src={icon} alt="Icon" className="h-4 w-4" />
-        <span
-          style={{
-            fontSize: "var(--text-sm)",
-            fontWeight: 600,
-            color: "var(--text-primary)",
-            fontFamily: "var(--font-sans)",
-            letterSpacing: "-0.01em",
-          }}
-        >
-          Rust-ine
-        </span>
+      <div className="flex items-center px-3 pointer-events-none">
+        <FlintLogo size={18} />
       </div>
 
       <div className="flex h-full items-center">
-        {/* History + Settings */}
-        <button
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={onShowHistory}
-          className="flex h-full items-center justify-center"
-          style={{
-            width: 36,
-            color: "var(--text-tertiary)",
-            transition: "all 150ms ease",
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--bg-overlay)";
-            e.currentTarget.style.color = "var(--text-secondary)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "transparent";
-            e.currentTarget.style.color = "var(--text-tertiary)";
-          }}
-        >
-          <Clock className="h-3.5 w-3.5" strokeWidth={1.5} />
-        </button>
+        {/* Settings */}
         <button
           onMouseDown={(e) => e.stopPropagation()}
           onClick={onShowSettings}

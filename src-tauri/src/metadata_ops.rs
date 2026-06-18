@@ -55,13 +55,6 @@ const EXIF_TAGS: &[(Tag, &str)] = &[
 ];
 
 pub fn read_image_metadata(path: &str) -> Result<ImageMetadata, String> {
-    let reader = image::ImageReader::open(path).map_err(|e| format!("Cannot open file: {}", e))?;
-
-    // Read dimensions from header only — avoids decoding the full image
-    let (width, height) = reader
-        .into_dimensions()
-        .map_err(|e| format!("Cannot read image dimensions: {}", e))?;
-
     let ext = Path::new(path)
         .extension()
         .and_then(|e| e.to_str())
@@ -70,29 +63,31 @@ pub fn read_image_metadata(path: &str) -> Result<ImageMetadata, String> {
 
     let size = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
 
-    // Extract color type and bit depth from the decoder header — avoids full pixel decode
-    let (bit_depth, color_type) = match image::ImageReader::open(path)
+    // Build a single decoder from the header and read both dimensions and color
+    // type from it — avoids re-opening the file just for one piece of metadata.
+    let decoder = image::ImageReader::open(path)
         .and_then(|r| r.with_guessed_format())
-        .and_then(|r| r.into_decoder().map_err(std::io::Error::other))
-    {
-        Ok(decoder) => {
-            let ct = match decoder.color_type() {
-                image::ColorType::L8 => ("8", "Grayscale"),
-                image::ColorType::La8 => ("8", "Grayscale+Alpha"),
-                image::ColorType::Rgb8 => ("8", "RGB"),
-                image::ColorType::Rgba8 => ("8", "RGBA"),
-                image::ColorType::L16 => ("16", "Grayscale"),
-                image::ColorType::La16 => ("16", "Grayscale+Alpha"),
-                image::ColorType::Rgb16 => ("16", "RGB"),
-                image::ColorType::Rgba16 => ("16", "RGBA"),
-                image::ColorType::Rgb32F => ("32", "RGB Float"),
-                image::ColorType::Rgba32F => ("32", "RGBA Float"),
-                _ => ("?", "Unknown"),
-            };
-            (Some(ct.0.to_string()), Some(ct.1.to_string()))
-        }
-        Err(_) => (None, None),
+        .map_err(|e| format!("Cannot open file: {}", e))?
+        .into_decoder()
+        .map_err(|e| format!("Cannot read image: {}", e))?;
+
+    let (width, height) = decoder.dimensions();
+
+    let ct = match decoder.color_type() {
+        image::ColorType::L8 => ("8", "Grayscale"),
+        image::ColorType::La8 => ("8", "Grayscale+Alpha"),
+        image::ColorType::Rgb8 => ("8", "RGB"),
+        image::ColorType::Rgba8 => ("8", "RGBA"),
+        image::ColorType::L16 => ("16", "Grayscale"),
+        image::ColorType::La16 => ("16", "Grayscale+Alpha"),
+        image::ColorType::Rgb16 => ("16", "RGB"),
+        image::ColorType::Rgba16 => ("16", "RGBA"),
+        image::ColorType::Rgb32F => ("32", "RGB Float"),
+        image::ColorType::Rgba32F => ("32", "RGBA Float"),
+        _ => ("?", "Unknown"),
     };
+    let bit_depth = Some(ct.0.to_string());
+    let color_type = Some(ct.1.to_string());
 
     // Extract DPI from EXIF resolution tags
     let mut dpi: Option<(u32, u32)> = None;
@@ -141,4 +136,104 @@ pub fn read_image_metadata(path: &str) -> Result<ImageMetadata, String> {
         dpi,
         exif: exif_entries,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{GrayImage, Luma, Rgba, RgbaImage};
+    use std::path::PathBuf;
+
+    fn unique_temp_path(test_name: &str, ext: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "metadata_ops_{}_{}.{}",
+            test_name,
+            std::process::id(),
+            ext
+        ))
+    }
+
+    #[test]
+    fn rgba_png_reports_dimensions_color_and_format() {
+        let path = unique_temp_path("rgba_png", "png");
+        let img = RgbaImage::from_pixel(7, 4, Rgba([10, 20, 30, 255]));
+        img.save(&path).expect("save synthetic rgba png");
+
+        let meta = read_image_metadata(path.to_str().unwrap()).expect("read metadata");
+
+        assert_eq!(meta.width, 7);
+        assert_eq!(meta.height, 4);
+        // Extension is upper-cased.
+        assert_eq!(meta.format, "PNG");
+        // RGBA8 maps to 8-bit / RGBA.
+        assert_eq!(meta.bit_depth.as_deref(), Some("8"));
+        assert_eq!(meta.color_type.as_deref(), Some("RGBA"));
+        // File size is read from disk and must be non-zero for a real PNG.
+        assert!(meta.file_size > 0);
+        // Path is echoed back verbatim.
+        assert_eq!(meta.path, path.to_str().unwrap());
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn synthetic_png_has_no_exif_and_no_dpi() {
+        let path = unique_temp_path("no_exif", "png");
+        let img = RgbaImage::from_pixel(3, 3, Rgba([0, 0, 0, 255]));
+        img.save(&path).expect("save synthetic png");
+
+        let meta = read_image_metadata(path.to_str().unwrap()).expect("read metadata");
+
+        // A freshly synthesized PNG carries no EXIF block, so defaults apply.
+        assert!(meta.exif.is_empty());
+        assert_eq!(meta.dpi, None);
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn grayscale_png_maps_to_grayscale_color_type() {
+        let path = unique_temp_path("gray_png", "png");
+        let img = GrayImage::from_pixel(5, 6, Luma([128]));
+        img.save(&path).expect("save synthetic grayscale png");
+
+        let meta = read_image_metadata(path.to_str().unwrap()).expect("read metadata");
+
+        assert_eq!(meta.width, 5);
+        assert_eq!(meta.height, 6);
+        assert_eq!(meta.bit_depth.as_deref(), Some("8"));
+        assert_eq!(meta.color_type.as_deref(), Some("Grayscale"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn missing_file_returns_err() {
+        let path = unique_temp_path("missing", "png");
+        // Ensure it does not exist.
+        let _ = std::fs::remove_file(&path);
+
+        let result = read_image_metadata(path.to_str().unwrap());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn metadata_serializes_to_json_with_expected_fields() {
+        let path = unique_temp_path("json", "png");
+        let img = RgbaImage::from_pixel(2, 2, Rgba([255, 255, 255, 255]));
+        img.save(&path).expect("save synthetic png");
+
+        let meta = read_image_metadata(path.to_str().unwrap()).expect("read metadata");
+        let json = serde_json::to_value(&meta).expect("serialize metadata");
+
+        assert_eq!(json["width"], 2);
+        assert_eq!(json["height"], 2);
+        assert_eq!(json["format"], "PNG");
+        // dpi is None -> serialized as null; exif is an empty array.
+        assert!(json["dpi"].is_null());
+        assert!(json["exif"].is_array());
+        assert_eq!(json["exif"].as_array().unwrap().len(), 0);
+
+        let _ = std::fs::remove_file(&path);
+    }
 }
